@@ -2,12 +2,11 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="bcc65a55-8d45-42f3-950f-d73e40eff4f9" name="Default" comment="">
-      <change beforePath="$PROJECT_DIR$/.gitignore" afterPath="$PROJECT_DIR$/.gitignore" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
       <change beforePath="$PROJECT_DIR$/crawler/crawler_future.py" afterPath="$PROJECT_DIR$/crawler/crawler_future.py" />
-      <change beforePath="$PROJECT_DIR$/crawler/process.py" afterPath="$PROJECT_DIR$/crawler/process.py" />
-      <change beforePath="$PROJECT_DIR$/db/mongo.py" afterPath="$PROJECT_DIR$/db/mongo.py" />
-      <change beforePath="$PROJECT_DIR$/utils/getWord2vec.py" afterPath="$PROJECT_DIR$/utils/getWord2vec.py" />
+      <change beforePath="$PROJECT_DIR$/crawler/parser.py" afterPath="$PROJECT_DIR$/crawler/parser.py" />
+      <change beforePath="$PROJECT_DIR$/crawler/process.py" afterPath="$PROJECT_DIR$/utils/process.py" />
+      <change beforePath="$PROJECT_DIR$/utils/getData.py" afterPath="$PROJECT_DIR$/utils/getItem2vec.py" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -17,9 +16,10 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="CoverageDataManager">
-    <SUITE FILE_PATH="coverage/DZDP$crawler_future.coverage" NAME="crawler_future Coverage Results" MODIFIED="1514268319715" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/crawler" />
-    <SUITE FILE_PATH="coverage/DZDP$getWord2vec.coverage" NAME="getWord2vec Coverage Results" MODIFIED="1513216906720" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
+    <SUITE FILE_PATH="coverage/DZDP$crawler_future.coverage" NAME="crawler_future Coverage Results" MODIFIED="1514273464183" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/crawler" />
     <SUITE FILE_PATH="coverage/DZDP$process.coverage" NAME="process Coverage Results" MODIFIED="1514267281711" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/crawler" />
+    <SUITE FILE_PATH="coverage/DZDP$getWord2vec.coverage" NAME="getWord2vec Coverage Results" MODIFIED="1514269890091" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
+    <SUITE FILE_PATH="coverage/DZDP$getItem2vec.coverage" NAME="getItem2vec Coverage Results" MODIFIED="1514274284960" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
     <SUITE FILE_PATH="coverage/DZDP$getIp.coverage" NAME="getIp Coverage Results" MODIFIED="1512810597664" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/DZDP$getData.coverage" NAME="getData Coverage Results" MODIFIED="1513826220086" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
     <SUITE FILE_PATH="coverage/DZDP$now_3.coverage" NAME="now-3 Coverage Results" MODIFIED="1514018349749" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
@@ -34,10 +34,22 @@
       <file leaf-file-name="crawler_future.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/crawler/crawler_future.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="170">
-              <caret line="48" column="20" lean-forward="false" selection-start-line="48" selection-start-column="20" selection-end-line="48" selection-end-column="20" />
+            <state relative-caret-position="104">
+              <caret line="175" column="20" lean-forward="false" selection-start-line="175" selection-start-column="20" selection-end-line="175" selection-end-column="20" />
               <folding>
                 <element signature="e#0#13#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="parser.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/crawler/parser.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="225">
+              <caret line="410" column="0" lean-forward="true" selection-start-line="410" selection-start-column="0" selection-end-line="410" selection-end-column="0" />
+              <folding>
+                <element signature="e#27#36#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -46,19 +58,21 @@
       <file leaf-file-name="mongo.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/db/mongo.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="298">
-              <caret line="49" column="0" lean-forward="false" selection-start-line="49" selection-start-column="0" selection-end-line="49" selection-end-column="0" />
+            <state relative-caret-position="161">
+              <caret line="24" column="47" lean-forward="false" selection-start-line="24" selection-start-column="47" selection-end-line="24" selection-end-column="47" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="getData.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/utils/getData.py">
+      <file leaf-file-name="getItem2vec.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/utils/getItem2vec.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="705">
-              <caret line="47" column="31" lean-forward="false" selection-start-line="47" selection-start-column="31" selection-end-line="47" selection-end-column="31" />
-              <folding />
+            <state relative-caret-position="689">
+              <caret line="58" column="0" lean-forward="true" selection-start-line="58" selection-start-column="0" selection-end-line="58" selection-end-column="0" />
+              <folding>
+                <element signature="e#0#11#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -66,21 +80,11 @@
       <file leaf-file-name="getWord2vec.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/utils/getWord2vec.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="110">
-              <caret line="17" column="0" lean-forward="true" selection-start-line="17" selection-start-column="0" selection-end-line="17" selection-end-column="0" />
+            <state relative-caret-position="210">
+              <caret line="14" column="18" lean-forward="true" selection-start-line="14" selection-start-column="18" selection-end-line="14" selection-end-column="18" />
               <folding>
                 <element signature="e#25#37#0" expanded="true" />
               </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name=".gitignore" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/.gitignore">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="90">
-              <caret line="6" column="0" lean-forward="true" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
-              <folding />
             </state>
           </provider>
         </entry>
@@ -96,20 +100,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>review-words</find>
-      <find>xuxp59</find>
-      <find>req</find>
-      <find>time</find>
-      <find>search_by_regex</find>
-      <find>heartNum</find>
-      <find>shopGlat</find>
-      <find>id_pattern</find>
-      <find>Exception</find>
-      <find>ipWeights</find>
-      <find>crawl_wait_time</find>
-      <find>get_entry_iter</find>
-      <find>done_crawl</find>
-      <find>self._crawl_wait_time</find>
       <find>praise</find>
       <find>favorList</find>
       <find>insert_with_update</find>
@@ -126,11 +116,22 @@
       <find>update_json</find>
       <find>ref</find>
       <find>time_tick</find>
+      <find>&quot;unfinished&quot;</find>
+      <find>&quot;urllist&quot;</find>
+      <find>item</find>
+      <find>score</find>
+      <find>hasModel</find>
+      <find>&quot;review&quot;</find>
+      <find>&quot;shop&quot;</find>
+      <find>&quot;member&quot;</find>
+      <find>&quot;wishlist&quot;</find>
+      <find>&quot;</find>
+      <find>reviewer-id</find>
+      <find>member</find>
+      <find>shop_id</find>
+      <find>review</find>
     </findStrings>
     <replaceStrings>
-      <replace />
-      <replace>train_file_path</replace>
-      <replace>EMOJI_PATTERN</replace>
       <replace>id_pattern</replace>
       <replace>comment_list</replace>
       <replace>comment_block</replace>
@@ -148,6 +149,19 @@
       <replace>return</replace>
       <replace>update_dic</replace>
       <replace>tick</replace>
+      <replace>COLL_UNFINISHED</replace>
+      <replace>COLL_URL_LIST</replace>
+      <replace>COLL_WISH_LIST</replace>
+      <replace>review_item</replace>
+      <replace>has_model</replace>
+      <replace>COLL_REVIEW</replace>
+      <replace>REVIEW</replace>
+      <replace>SHOP</replace>
+      <replace>MEMBER</replace>
+      <replace>WISH_LIST</replace>
+      <replace>member-id</replace>
+      <replace>item</replace>
+      <replace>dim_id</replace>
     </replaceStrings>
     <dirStrings>
       <dir>$PROJECT_DIR$</dir>
@@ -173,12 +187,13 @@
         <option value="$PROJECT_DIR$/crawler/urldata.py" />
         <option value="$PROJECT_DIR$/nowcoder.py" />
         <option value="$PROJECT_DIR$/now-3.py" />
-        <option value="$PROJECT_DIR$/crawler/parser.py" />
         <option value="$PROJECT_DIR$/crawler/process.py" />
         <option value="$PROJECT_DIR$/.gitignore" />
-        <option value="$PROJECT_DIR$/db/mongo.py" />
-        <option value="$PROJECT_DIR$/crawler/crawler_future.py" />
         <option value="$PROJECT_DIR$/utils/getWord2vec.py" />
+        <option value="$PROJECT_DIR$/db/mongo.py" />
+        <option value="$PROJECT_DIR$/crawler/parser.py" />
+        <option value="$PROJECT_DIR$/crawler/crawler_future.py" />
+        <option value="$PROJECT_DIR$/utils/getItem2vec.py" />
       </list>
     </option>
   </component>
@@ -225,6 +240,23 @@
             <path>
               <item name="DZDP" type="b2602c69:ProjectViewProjectNode" />
               <item name="DZDP" type="462c0819:PsiDirectoryNode" />
+              <item name="data" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="DZDP" type="b2602c69:ProjectViewProjectNode" />
+              <item name="DZDP" type="462c0819:PsiDirectoryNode" />
+              <item name="data" type="462c0819:PsiDirectoryNode" />
+              <item name="embedding" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="DZDP" type="b2602c69:ProjectViewProjectNode" />
+              <item name="DZDP" type="462c0819:PsiDirectoryNode" />
+              <item name="data" type="462c0819:PsiDirectoryNode" />
+              <item name="review_words" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="DZDP" type="b2602c69:ProjectViewProjectNode" />
+              <item name="DZDP" type="462c0819:PsiDirectoryNode" />
               <item name="utils" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
@@ -240,13 +272,13 @@
     <property name="js.eslint.eslintPackage" value="" />
   </component>
   <component name="RecentsManager">
-    <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/crawler" />
-    </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/utils" />
       <recent name="$PROJECT_DIR$/models" />
       <recent name="$PROJECT_DIR$/data" />
-      <recent name="$PROJECT_DIR$/utils" />
+      <recent name="$PROJECT_DIR$/crawler" />
+    </key>
+    <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/crawler" />
     </key>
   </component>
@@ -262,7 +294,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.crawler_future">
+  <component name="RunManager" selected="Python.getItem2vec">
     <configuration name="crawler_future" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -282,7 +314,7 @@
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
     </configuration>
-    <configuration name="getData" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="getItem2vec" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
@@ -295,27 +327,27 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="DZDP" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utils/getData.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utils/getItem2vec.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
     </configuration>
-    <configuration name="now-3" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="getWord2vec" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/utils" />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="DZDP" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/now-3.py" />
-      <option name="PARAMETERS" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utils/getWord2vec.py" />
+      <option name="PARAMETERS" value="20171214100150 1526247" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -352,7 +384,7 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="DZDP" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/crawler/process.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utils/process.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -651,18 +683,18 @@
     </configuration>
     <list size="5">
       <item index="0" class="java.lang.String" itemvalue="Python.crawler_future" />
-      <item index="1" class="java.lang.String" itemvalue="Python.getData" />
-      <item index="2" class="java.lang.String" itemvalue="Python.nowcoder" />
-      <item index="3" class="java.lang.String" itemvalue="Python.now-3" />
-      <item index="4" class="java.lang.String" itemvalue="Python.process" />
+      <item index="1" class="java.lang.String" itemvalue="Python.nowcoder" />
+      <item index="2" class="java.lang.String" itemvalue="Python.process" />
+      <item index="3" class="java.lang.String" itemvalue="Python.getWord2vec" />
+      <item index="4" class="java.lang.String" itemvalue="Python.getItem2vec" />
     </list>
     <recent_temporary>
       <list size="5">
-        <item index="0" class="java.lang.String" itemvalue="Python.crawler_future" />
-        <item index="1" class="java.lang.String" itemvalue="Python.process" />
-        <item index="2" class="java.lang.String" itemvalue="Python.nowcoder" />
-        <item index="3" class="java.lang.String" itemvalue="Python.now-3" />
-        <item index="4" class="java.lang.String" itemvalue="Python.getData" />
+        <item index="0" class="java.lang.String" itemvalue="Python.getItem2vec" />
+        <item index="1" class="java.lang.String" itemvalue="Python.crawler_future" />
+        <item index="2" class="java.lang.String" itemvalue="Python.getWord2vec" />
+        <item index="3" class="java.lang.String" itemvalue="Python.process" />
+        <item index="4" class="java.lang.String" itemvalue="Python.nowcoder" />
       </list>
     </recent_temporary>
   </component>
@@ -761,13 +793,6 @@
     </expressions>
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/crawler/crawler_threads.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="0">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/data/review_words/review_words_20171204202630.data" />
     <entry file="file://$PROJECT_DIR$/utils/getWord2vec.py">
       <provider selected="true" editor-type-id="text-editor">
@@ -954,13 +979,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/data/review_words/review_words_20171214100150.data">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="146">
-          <caret line="59286" column="7" lean-forward="false" selection-start-line="59286" selection-start-column="7" selection-end-line="59286" selection-end-column="7" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/shop.html">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="121">
@@ -1012,7 +1030,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/crawler/process.py">
+    <entry file="file://$PROJECT_DIR$/utils/process.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="120">
           <caret line="8" column="21" lean-forward="false" selection-start-line="8" selection-start-column="21" selection-end-line="8" selection-end-column="21" />
@@ -1028,42 +1046,66 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/crawler/parser.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="45">
-          <caret line="382" column="0" lean-forward="true" selection-start-line="382" selection-start-column="0" selection-end-line="382" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/utils/getData.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="705">
-          <caret line="47" column="31" lean-forward="false" selection-start-line="47" selection-start-column="31" selection-end-line="47" selection-end-column="31" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/.gitignore">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="90">
-          <caret line="6" column="0" lean-forward="true" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
+          <caret line="6" column="0" lean-forward="false" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
           <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/data/review_words/review_words_20171226143013.data">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/data/review_words/review_words_20171214100150.data">
+      <provider editor-type-id="text-editor">
+        <state relative-caret-position="146">
+          <caret line="59286" column="7" lean-forward="false" selection-start-line="59286" selection-start-column="7" selection-end-line="59286" selection-end-column="7" />
+        </state>
+      </provider>
+      <provider selected="true" editor-type-id="LargeFileEditor">
+        <state relative-caret-position="-888516">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/db/mongo.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="298">
-          <caret line="49" column="0" lean-forward="false" selection-start-line="49" selection-start-column="0" selection-end-line="49" selection-end-column="0" />
+        <state relative-caret-position="161">
+          <caret line="24" column="47" lean-forward="false" selection-start-line="24" selection-start-column="47" selection-end-line="24" selection-end-column="47" />
           <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/crawler/parser.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="225">
+          <caret line="410" column="0" lean-forward="true" selection-start-line="410" selection-start-column="0" selection-end-line="410" selection-end-column="0" />
+          <folding>
+            <element signature="e#27#36#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/getItem2vec.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="689">
+          <caret line="58" column="0" lean-forward="true" selection-start-line="58" selection-start-column="0" selection-end-line="58" selection-end-column="0" />
+          <folding>
+            <element signature="e#0#11#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/crawler/crawler_future.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="170">
-          <caret line="48" column="20" lean-forward="false" selection-start-line="48" selection-start-column="20" selection-end-line="48" selection-end-column="20" />
+        <state relative-caret-position="104">
+          <caret line="175" column="20" lean-forward="false" selection-start-line="175" selection-start-column="20" selection-end-line="175" selection-end-column="20" />
           <folding>
             <element signature="e#0#13#0" expanded="true" />
           </folding>
@@ -1072,8 +1114,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/utils/getWord2vec.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="110">
-          <caret line="17" column="0" lean-forward="true" selection-start-line="17" selection-start-column="0" selection-end-line="17" selection-end-column="0" />
+        <state relative-caret-position="210">
+          <caret line="14" column="18" lean-forward="true" selection-start-line="14" selection-start-column="18" selection-end-line="14" selection-end-column="18" />
           <folding>
             <element signature="e#25#37#0" expanded="true" />
           </folding>

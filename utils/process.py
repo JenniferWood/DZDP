@@ -6,7 +6,7 @@ if __name__ == "__main__":
     count = 0
     for item in obj.get_all("wishlist_f"):
         count += 1
-        if count % 100 == 0:
+        if count % 10 == 0:
             print count
         member_id = item["member-id"]
         wish_list = item["wishlist"]
