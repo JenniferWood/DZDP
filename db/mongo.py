@@ -45,6 +45,9 @@ class MyMongoDb:
 
             count += 1
 
+    def get_data_size(self, collection_name, **kv):
+        return self.get_all(collection_name, **kv).count()
+
     def exists(self, collection_name, **kv):
         return self.get_one(collection_name, **kv) is not None
 

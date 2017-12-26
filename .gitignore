@@ -3,4 +3,4 @@ crawler/.DS_Store
 data/review_words/.DS_Store
 .DS_Store
 *.pyc
-.idea/workspace.xml
+data/*

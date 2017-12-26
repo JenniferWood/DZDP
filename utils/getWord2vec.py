@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
-from pymongo import MongoClient as mc
+import jieba
+import re
+import sys
+import time
+import os
 from gensim.models import word2vec
-import jieba, re, sys, time, os
+from db import mongo
 
 MODEL_FILE = '../models/fasttext_model_review_word_skipgram'
 Train_File_Format = '../data/review_words/review_words_%s.data'
@@ -42,34 +46,32 @@ def remove_emoji(text):
     return EMOJI_PATTERN.sub(r'', text.strip())
 
 
-def get_raw_data(timetick):
+def get_raw_data(tick):
     stopwords = get_stop_words()
-    con = mc("localhost", 27017)
-    db = con.dzdp
+    dao = mongo.MyMongoDb("dzdp")
 
     print "Get Review Data..."
 
-    train_file_path = Train_File_Format % timetick
+    train_file_path = Train_File_Format % tick
 
     with open(train_file_path, 'a') as fwrite:
         i = 0
-        wid = db.word.find().count()
+        wid = dao.get_data_size("word")
 
         try:
-            for reviewItem in db.review.find({"got": False}):
-                shopId = reviewItem["shop-id"]
-                if db.shop.find_one({"id": shopId}) is None: continue
+            for review_item in dao.get_all("review", got=False):
+                shop_id = review_item["shop-id"]
+                if not dao.exists("shop", id=shop_id):
+                    continue
 
-                review = remove_emoji(reviewItem["comment"])
-                # print review
+                review = remove_emoji(review_item["comment"])
                 seg_list = jieba.cut(review, cut_all=False)
                 word_id_list = []
-
                 sent_contain_new_word = False
-
                 for word in seg_list:
                     if word in SPLIT_KEY or word.strip == '':
-                        if len(word_id_list) == 0: continue
+                        if len(word_id_list) == 0:
+                            continue
                         s = ' '.join(word_id_list)
                         # print s
                         fwrite.write("%s\n" % s)
@@ -80,11 +82,10 @@ def get_raw_data(timetick):
                             print ""
                             sent_contain_new_word = False
                     elif word not in stopwords:
-                        # print word
-                        existed = db.word.find_one({"word": word})
+                        existed = dao.get_one("word", word=word)
                         if existed is None:
                             word_id_list.append(str(wid))
-                            db.word.insert({"word": word, "id": wid})
+                            dao.insert("word", word=word, id=wid)
                             wid += 1
 
                             print "[%s %s]" % (word, wid),
@@ -98,9 +99,8 @@ def get_raw_data(timetick):
 
                     if sent_contain_new_word:
                         print ""
-                        sent_contain_new_word = False
 
-                db.review.update(reviewItem, {"$set": {"got": True}})
+                dao.update("review", review_item, {"got": True})
         except KeyboardInterrupt:
             raise
         except Exception, ex:
@@ -111,16 +111,16 @@ def get_raw_data(timetick):
             return i
 
 
-def train_model(train_file_path, sentenceNum, hasModel=False):
+def train_model(train_file_path, sentence_num, has_model=False):
     # sentences = word2vec.Text8Corpus(train_file_path)
     print "Training Model..."
 
     sentences = MySentences(train_file_path)
     start = time.time()
 
-    if hasModel:
+    if has_model:
         model = word2vec.Word2Vec.load(MODEL_FILE)
-        update_num = model.train(sentences, total_examples=sentenceNum, epochs=model.iter)
+        update_num = model.train(sentences, total_examples=sentence_num, epochs=model.iter)
         print 'Update %d Words' % update_num
     else:
         model = word2vec.Word2Vec(sentences, size=256, window=10, min_count=64, sg=1, hs=1, iter=10, workers=4)
@@ -146,8 +146,10 @@ if __name__ == '__main__':
             cur_sent_num = get_raw_data(time_tick)
             whole_sent_num += cur_sent_num
             file_size = os.path.getsize(train_file) / 1024.0 / 1024.0
-            print "--------------------------\n%f M and %d Lines\n--------------------------" % (file_size, whole_sent_num)
-            if file_size >= MAX_FILE_SIZE: break
+            print "--------------------------\n%f M and %d Lines\n--------------------------" % \
+                  (file_size, whole_sent_num)
+            if file_size >= MAX_FILE_SIZE:
+                break
             time.sleep(120)
 
         train_model(train_file, whole_sent_num, True)
