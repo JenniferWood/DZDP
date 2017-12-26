@@ -81,6 +81,16 @@ class CrawlerClass:
 
         return res is not None
 
+    def exists_by_key(self, collection_name, json):
+        query = {}
+        for i in range(COLL_KEY[collection_name][0]):
+            key = COLL_KEY[collection_name][i + 1]
+            query[key] = json[key]
+        return self.get_one_entry(collection_name, **query) is not None
+
+    def insert(self, collection_name, json):
+        self._db[collection_name].insert(json)
+
     def insert_with_update(self, collection_name, json):
         collection = self._db[collection_name]
         query = {}
