@@ -6,6 +6,11 @@ import math
 from urldata import UrlData
 from urlparse import urljoin
 
+REVIEW = "review"
+SHOP = "shop"
+MEMBER = "member"
+WISH_LIST = "wishlist"
+
 
 class ParserFactory:
     def __init__(self, url_data, soup):
@@ -118,8 +123,8 @@ class ShopParser(ParserFactory):
         if self.skip:
             return
         self._next_links.append(
-            UrlData(self._url_data.url+"/review_all", self._url_data.url, type="shop", 
-                    collection="review", id=self._url_data.id))
+            UrlData(self._url_data.url+"/review_all", self._url_data.url,
+                    type=SHOP, collection=REVIEW, id=self._url_data.id))
 
         links = self.soup.find_all(attrs={"itemprop": "url"})
         for link in links:
@@ -155,10 +160,10 @@ class MemberParser(ParserFactory):
     def update_links(self):
         member_reviews_url = self._url_data.url+"/reviews?reviewCityId=2&reviewShopType=10"
         self._next_links.append(
-            UrlData(member_reviews_url, self._url_data.url, type="member", collection="review", id=self._url_data.id))
+            UrlData(member_reviews_url, self._url_data.url, type=MEMBER, collection=REVIEW, id=self._url_data.id))
         member_wish_url = self._url_data.url+"/wishlists?favorTag=s10_c2_t-1"
         self._next_links.append(
-            UrlData(member_wish_url, self._url_data.url, type="member", collection="wishlist", id=self._url_data.id))
+            UrlData(member_wish_url, self._url_data.url, type=MEMBER, collection=WISH_LIST, id=self._url_data.id))
 
 
 class ReviewParser(ParserFactory):
@@ -182,7 +187,7 @@ class ReviewParser(ParserFactory):
         # member id
         reviewer_info = cont_list.select(".B")[0]
         reviewer_id_res = self.search_by_regex(id_pattern, reviewer_info['href'])
-        review["reviewer-id"] = reviewer_id_res[0]
+        review["member-id"] = reviewer_id_res[0]
 
         # review score info
         start_block = cont_list.find(class_=re.compile('msstar'))
@@ -190,16 +195,15 @@ class ReviewParser(ParserFactory):
             star_str = cont_list.find(class_=re.compile('msstar'))['class'][0][-2:]
             review["star"] = float(star_str)/10.0
 
-        score = []
+        score = [-1.0] * 3
+        key_pos = {u"口味": 0, u"环境": 1, u"服务": 2}
+        key_val_pattern = u'(.*)\s*：\s*(\d+)'
         comment_rest = cont_list.select(".comment-rst .rst")
         for rst in comment_rest:
-            score_res = self.search_by_regex(id_pattern, rst.text)
-            if score_res is None:
-                score.append(0.0)
-            else:
-                score.append(float(score_res[0]))
+            key_val = self.search_by_regex(key_val_pattern, rst.text.strip())
+            score[key_pos[key_val[0]]] = float(key_val[1])
         review["score"] = score
-        
+
         # review text
         review["comment"] = cont_list.find(class_="cont_list-con").text.strip()
 
@@ -244,12 +248,12 @@ class ShopReviewsParser(ParserFactory):
             review = {
                 "id": comment_block.find(class_='report')['data-id'],
                 "shop-id": self._url_data.id,
-                "reviewer-id": comment_block.find(class_='dper-photo-aside')['data-user-id']
+                "member-id": comment_block.find(class_='dper-photo-aside')['data-user-id']
             }
 
-            member_url = "http://www.dianping.com/member/%s" % review["reviewer-id"]
+            member_url = "http://www.dianping.com/member/%s" % review["member-id"]
             self._next_links.append(
-                UrlData(member_url, self._url_data.url, type="member", collection="member", id=review["reviewer-id"]))
+                UrlData(member_url, self._url_data.url, type=MEMBER, collection=MEMBER, id=review["member-id"]))
 
             # Review rank
             review_rank = comment_block.find(class_="review-rank")
@@ -260,7 +264,7 @@ class ShopReviewsParser(ParserFactory):
             score_list = review_rank.select(".score .item")
             key_val_pattern = u'(.*)\s*：\s*(\d+)'
             if len(score_list) > 0:
-                score = [0.0] * 3
+                score = [-1.0] * 3
                 key_pos = {u"口味": 0, u"环境": 1, u"服务": 2}
                 for _ in score_list:
                     key_val = self.search_by_regex(key_val_pattern, _.text.strip())
@@ -296,7 +300,7 @@ class ShopReviewsParser(ParserFactory):
         page_numbers = self.soup.select(".Pages a")
         if len(page_numbers) > 2:
             max_page = int(page_numbers[-2].text)
-            self.expand_by_page(max_page, "?pageno=%d", "shop", "review", self._url_data.id)
+            self.expand_by_page(max_page, "?pageno=%d", SHOP, REVIEW, self._url_data.id)
 
 
 class MemberReviewsParser(ParserFactory):
@@ -308,19 +312,19 @@ class MemberReviewsParser(ParserFactory):
             j_report = comment_block.find(class_="j_report")
             shop_id = str(j_report["data-sid"])
             shop_url = comment_block.find(class_="J_rpttitle")["href"]
-            self._next_links.append(UrlData(shop_url, self._url_data.url, type="shop", collection="shop", id=shop_id))
+            self._next_links.append(UrlData(shop_url, self._url_data.url, type=SHOP, collection=SHOP, id=shop_id))
 
             review_id = j_report["data-id"]
 
             review = {
                 "shop-id": shop_id,
-                "reviewer-id": self._url_data.id,
+                "member-id": self._url_data.id,
                 "id": review_id}
             score_spans = comment_block.select(".mode-tc.comm-rst span")
             if len(score_spans) == 0 or not score_spans[0].has_attr('class'):
                 review_url = "http://www.dianping.com/review/%s" % review_id
                 self._next_links.append(
-                    UrlData(review_url, self._url_data.url, type="review", collection="review", id=review_id))
+                    UrlData(review_url, self._url_data.url, type=REVIEW, collection=REVIEW, id=review_id))
                 continue
 
             star_str = score_spans[0]['class'][1][-2:]
@@ -346,7 +350,7 @@ class MemberReviewsParser(ParserFactory):
             max_page = int(page_numbers[-2].text)
             self.expand_by_page(
                 max_page,
-                "?pg=%d&reviewCityId=2&reviewShopType=10", "member", "review", self._url_data.id)
+                "?pg=%d&reviewCityId=2&reviewShopType=10", MEMBER, REVIEW, self._url_data.id)
 
 
 class MemberWishlistParser(ParserFactory):
@@ -367,7 +371,7 @@ class MemberWishlistParser(ParserFactory):
 
             shop_url = "http://www.dianping.com/shop/%s" % favor["shop-id"]
             self._next_links.append(
-                UrlData(shop_url, self._url_data.url, type="shop", collection="shop", id=favor["shop-id"]))
+                UrlData(shop_url, self._url_data.url, type=SHOP, collection=SHOP, id=favor["shop-id"]))
 
             res.append(favor)
 
@@ -379,7 +383,7 @@ class MemberWishlistParser(ParserFactory):
         page_numbers = self.soup.select(".pages-num a")
         if len(page_numbers) > 2:
             max_page = int(page_numbers[-2].text)
-            self.expand_by_page(max_page, "?pg=%d&favorTag=s10_c2_t-1", "member", "wishlist", self._url_data.id)
+            self.expand_by_page(max_page, "?pg=%d&favorTag=s10_c2_t-1", MEMBER, WISH_LIST, self._url_data.id)
 
 
 class ListParser(ParserFactory):

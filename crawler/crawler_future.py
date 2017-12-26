@@ -41,6 +41,10 @@ COLL_KEY = {
     "wishlist": (2, "member-id", "shop-id")
 }
 
+COLL_REVIEW = "review"
+COLL_UNFINISHED = "unfinished"
+COLL_URL_LIST = "urllist"
+
 RETRY_MAX_TIMES = 5
 RETRY_WAIT_TIME = 1
 THREAD_WAIT_UPPER = 60
@@ -104,9 +108,9 @@ class CrawlerClass:
 
     def crawl(self, url):
         page = UrlData(url)
-        if self._dao.exists("urllist", url=url):
+        if self._dao.exists(COLL_URL_LIST, url=url):
             print "[Already Crawled] %s" % url
-            self._dao.remove("unfinished", url=url)
+            self._dao.remove(COLL_UNFINISHED, url=url)
             return
 
         try:
@@ -115,21 +119,21 @@ class CrawlerClass:
             # Insert
             for data in crawled_data:
                 self._dao.insert_with_update(page.collection, data)
-                if page.collection == "review":
+                if page.collection == COLL_REVIEW:
                     db_content = self._dao.get_one(page.collection, **data)
                     if "got" not in db_content:
                         self._dao.update(page.collection, data, {"got": False})
 
             # Next Links
             for link in links:
-                if self._dao.exists("urllist", url=link.url) or self._dao.exists("unfinished", url=link.url):
+                if self._dao.exists(COLL_URL_LIST, url=link.url) or self._dao.exists(COLL_UNFINISHED, url=link.url):
                     continue
-                self._dao.insert("unfinished", url=link.url)
+                self._dao.insert(COLL_UNFINISHED, url=link.url)
             self.done_crawl(page)
 
         except Exception, ex:
-            self._dao.remove("unfinished", url=url)
-            self._dao.insert("unfinished", url=url, ref=page.ref)
+            self._dao.remove(COLL_UNFINISHED, url=url)
+            self._dao.insert(COLL_UNFINISHED, url=url, ref=page.ref)
 
             print "[Exception][%s] %s: %s" % (page.collection, url, ex)
 
@@ -166,13 +170,13 @@ class CrawlerClass:
         print "Get proxy ip Done! total %d." % len(self._ip_list)
 
     def done_crawl(self, page):
-        self._dao.insert("urllist", url=page.url, ref=page.ref)
-        self._dao.remove("unfinished", url=page.url)
+        self._dao.insert(COLL_URL_LIST, url=page.url, ref=page.ref)
+        self._dao.remove(COLL_UNFINISHED, url=page.url)
 
     def setup(self, is_limited=False):
         start_time = time.time()
         with futures.ThreadPoolExecutor(MAX_WORKER_NUM) as pool:
-            pool.map(self.crawl, self._dao.get_iter("unfinished", is_limited, MAX_CRAWLING_NUM))
+            pool.map(self.crawl, self._dao.get_iter(COLL_UNFINISHED, is_limited, MAX_CRAWLING_NUM))
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)
 
 
