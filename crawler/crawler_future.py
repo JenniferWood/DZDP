@@ -91,6 +91,9 @@ class CrawlerClass:
     def insert(self, collection_name, json):
         self._db[collection_name].insert(json)
 
+    def remove(self, collection_name, json):
+        self._db[collection_name].remove(json)
+
     def insert_with_update(self, collection_name, json):
         collection = self._db[collection_name]
         query = {}
