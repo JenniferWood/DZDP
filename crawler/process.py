@@ -1,12 +1,12 @@
-import crawler_future
+from db import mongo
 
 if __name__ == "__main__":
-    obj = crawler_future.CrawlerClass("dzdp")
+    obj = mongo.MyMongoDb("dzdp")
 
     count = 0
-    for item in obj.get_entry("wishlist_f"):
+    for item in obj.get_all("wishlist_f"):
         count += 1
-        if count % 1000 == 0:
+        if count % 100 == 0:
             print count
         member_id = item["member-id"]
         wish_list = item["wishlist"]
@@ -14,5 +14,6 @@ if __name__ == "__main__":
             json = {"member-id": member_id, "shop-id": shop}
             if obj.exists_by_key("wishlist", json):
                 continue
-            obj.insert("wishlist", json)
+            obj.insert("wishlist", **json)
+        obj.remove("wishlist_f", **item)
     print count

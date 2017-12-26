@@ -3,9 +3,9 @@ import random
 import time
 import urllib2
 from bs4 import *
-from pymongo import MongoClient
 from urldata import UrlData
 from concurrent import futures
+from db import mongo
 
 HEADER_LIST = [
     {
@@ -46,61 +46,14 @@ RETRY_WAIT_TIME = 1
 THREAD_WAIT_UPPER = 60
 THREAD_WAIT_LOWER = 5
 MAX_WORKER_NUM = 5
-MAX_CRAWLING_NUM = 1000
+MAX_CRAWLING_NUM = 10
 
 
 class CrawlerClass:
     def __init__(self, db_name):
-        self._con = MongoClient("localhost", 27017)
-        self._db = self._con[db_name]
+        self._dao = mongo.MyMongoDb(db_name)
         self._ip_list = ["127.0.0.1"]
         self._ip_weights = [5]
-
-    def get_entry(self, collection_name, **kv):
-        collection = self._db[collection_name]
-        return collection.find(kv)
-
-    def get_entry_iter(self, collection_name, is_limited, **kv):
-        res = self._db[collection_name].find(kv)
-        count = 0
-        for item in res:
-            if is_limited and count >= MAX_CRAWLING_NUM:
-                break
-            # self._db[collection_name].remove(item)
-            yield item["url"]
-
-            count += 1
-
-    def get_one_entry(self, collection_name, **kv):
-        collection = self._db[collection_name]
-        return collection.find_one(kv)
-
-    def exists(self, collection_name, field, value):
-        collection = self._db[collection_name]
-        res = collection.find_one({field: value})
-
-        return res is not None
-
-    def exists_by_key(self, collection_name, json):
-        query = {}
-        for i in range(COLL_KEY[collection_name][0]):
-            key = COLL_KEY[collection_name][i + 1]
-            query[key] = json[key]
-        return self.get_one_entry(collection_name, **query) is not None
-
-    def insert(self, collection_name, json):
-        self._db[collection_name].insert(json)
-
-    def remove(self, collection_name, json):
-        self._db[collection_name].remove(json)
-
-    def insert_with_update(self, collection_name, json):
-        collection = self._db[collection_name]
-        query = {}
-        for i in range(COLL_KEY[collection_name][0]):
-            key = COLL_KEY[collection_name][i + 1]
-            query[key] = json[key]
-        collection.update(query, {'$set': json}, upsert=True)
 
     def crawl_page(self, page):
         # if ref != '':
@@ -151,9 +104,9 @@ class CrawlerClass:
 
     def crawl(self, url):
         page = UrlData(url)
-        if self.exists("urllist", "url", url):
+        if self._dao.exists("urllist", url=url):
             print "[Already Crawled] %s" % url
-            self._db["unfinished"].remove({"url": url})
+            self._dao.remove("unfinished", url=url)
             return
 
         try:
@@ -161,22 +114,22 @@ class CrawlerClass:
 
             # Insert
             for data in crawled_data:
-                self.insert_with_update(page.collection, data)
+                self._dao.insert_with_update(page.collection, data)
                 if page.collection == "review":
-                    db_content = self.get_one_entry("review", **data)
+                    db_content = self._dao.get_one(page.collection, **data)
                     if "got" not in db_content:
-                        self._db["review"].update(data, {"$set": {"got": False}}, upsert=True)
+                        self._dao.update(page.collection, data, {"got": False})
 
             # Next Links
             for link in links:
-                if self.exists("urllist", "url", link.url) or self.exists("unfinished", "url", link.url):
+                if self._dao.exists("urllist", url=link.url) or self._dao.exists("unfinished", url=link.url):
                     continue
-                self._db["unfinished"].insert({"url": link.url})
+                self._dao.insert("unfinished", url=link.url)
             self.done_crawl(page)
 
         except Exception, ex:
-            self._db["unfinished"].remove({"url": url})
-            self._db["unfinished"].insert({"url": url, "ref": page.ref})
+            self._dao.remove("unfinished", url=url)
+            self._dao.insert("unfinished", url=url, ref=page.ref)
 
             print "[Exception][%s] %s: %s" % (page.collection, url, ex)
 
@@ -213,13 +166,13 @@ class CrawlerClass:
         print "Get proxy ip Done! total %d." % len(self._ip_list)
 
     def done_crawl(self, page):
-        self._db["urllist"].insert({"url": page.url, "ref": page.ref})
-        self._db["unfinished"].remove({"url": page.url})
+        self._dao.insert("urllist", url=page.url, ref=page.ref)
+        self._dao.remove("unfinished", url=page.url)
 
     def setup(self, is_limited=False):
         start_time = time.time()
         with futures.ThreadPoolExecutor(MAX_WORKER_NUM) as pool:
-            pool.map(self.crawl, self.get_entry_iter("unfinished", is_limited))
+            pool.map(self.crawl, self._dao.get_iter("unfinished", is_limited, MAX_CRAWLING_NUM))
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)
 
 

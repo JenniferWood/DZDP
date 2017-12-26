@@ -292,7 +292,7 @@ class ShopReviewsParser(ParserFactory):
 
     def update_links(self):
         if self._url_data.url.find('pageno') != -1:
-            pass
+            return
         page_numbers = self.soup.select(".Pages a")
         if len(page_numbers) > 2:
             max_page = int(page_numbers[-2].text)
@@ -340,7 +340,7 @@ class MemberReviewsParser(ParserFactory):
 
     def update_links(self):
         if self._url_data.url.find('pg') != -1:
-            pass
+            return
         page_numbers = self.soup.select(".pages-num a")
         if len(page_numbers) > 2:
             max_page = int(page_numbers[-2].text)
@@ -375,7 +375,7 @@ class MemberWishlistParser(ParserFactory):
 
     def update_links(self):
         if self._url_data.url.find('pg') != -1:
-            pass
+            return
         page_numbers = self.soup.select(".pages-num a")
         if len(page_numbers) > 2:
             max_page = int(page_numbers[-2].text)
