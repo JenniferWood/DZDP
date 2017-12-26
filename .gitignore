@@ -4,3 +4,4 @@ data/review_words/.DS_Store
 .DS_Store
 *.pyc
 data/*
+.idea/*

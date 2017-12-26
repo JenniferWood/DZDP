@@ -2,7 +2,7 @@ import time
 from db import mongo
 from concurrent import futures
 
-ID_FILE_PATH = "../data/embedding/%s.ids"
+ID_FILE_PATH = "../data/embedding/%s_id"
 
 dao = mongo.MyMongoDb("dzdp")
 
@@ -22,7 +22,12 @@ def get_lists(dim):
 
     print "Get %s now..." % file_name
     with open(file_name, 'w') as fwrite:
+        i = 0
         for item in dao.get_all(symmetrical_dim):
+            i += 1
+            if i % 100 == 0:
+                print "[%s] %d" % (dim, i)
+
             dim_items = dao.get_all("wishlist", **{symmetrical_key_name: item["id"]})
 
             wish_list = [dim_item[dim_key_name] for dim_item in dim_items]
