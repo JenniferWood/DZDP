@@ -29,7 +29,9 @@ HEADER_LIST = [
                   ' __utma=1.1222946919.1462597685.1462597685.1511495987.2; __utmz=1.1511495987.2.1.utmcsr=(direct)|ut'
                   'mccn=(direct)|utmcmd=(none); ua=%E6%B5%85%E5%A4%8FJean; _hc.v="\"596cccc3-0737-42f5-8a30-c5521b5a6e'
                   '8a.1456192435\""'
-    }
+    },
+    {'User-Agent': 'Mozilla/5.0 (Macintosh;Intel Mac OS X 10.6;rv:2.0.1) Gecko/20100101 Firefox/4.0.1'},
+    {'User-Agent': 'Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8;U;en) Presto/2.8.131 Version/11.11'}
 ]
 
 COLL_KEY = {
@@ -175,6 +177,7 @@ class CrawlerClass:
 
     def setup(self, is_limited=False):
         start_time = time.time()
+        print "Start to crawl at most %d pages." % MAX_CRAWLING_NUM
         with futures.ThreadPoolExecutor(MAX_WORKER_NUM) as pool:
             pool.map(self.crawl, self._dao.get_iter(COLL_UNFINISHED, is_limited, MAX_CRAWLING_NUM))
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)

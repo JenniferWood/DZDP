@@ -7,6 +7,13 @@ ID_FILE_PATH = "../data/embedding/%s.ids"
 dao = mongo.MyMongoDb("dzdp")
 
 
+def write_list_to_file(fw, a_list):
+    if len(a_list) == 0:
+        return
+
+    fw.write('%s\n' % (' '.join(a_list)))
+
+
 def get_lists(dim):
     file_name = ID_FILE_PATH % dim
     symmetrical_dim = {"shop": "member", "member": "shop"}.get(dim)
@@ -17,8 +24,9 @@ def get_lists(dim):
     with open(file_name, 'w') as fwrite:
         for item in dao.get_all(symmetrical_dim):
             dim_items = dao.get_all("wishlist", **{symmetrical_key_name: item["id"]})
+
             wish_list = [dim_item[dim_key_name] for dim_item in dim_items]
-            fwrite.write('%s\n' % (' '.join(wish_list)))
+            write_list_to_file(fwrite, wish_list)
 
             good_review = []
             bad_review = []
@@ -44,10 +52,8 @@ def get_lists(dim):
                 else:
                     bad_review.append(dim_id)
 
-            if len(good_review) > 0:
-                fwrite.write('%s\n' % (' '.join(good_review)))
-            if len(bad_review) > 0:
-                fwrite.write('%s\n' % (' '.join(bad_review)))
+            write_list_to_file(fwrite, good_review)
+            write_list_to_file(fwrite, bad_review)
 
 
 def main():
