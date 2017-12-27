@@ -60,6 +60,14 @@ class CrawlerClass:
         self._dao = mongo.MyMongoDb(db_name)
         self._ip_list = ["127.0.0.1"]
         self._ip_weights = [5]
+        self.skip = {}
+
+    def whether_to_skip(self, page_collection):
+        if page_collection not in self.skip:
+            return False
+
+        _ = random.randint(0, 100)
+        return _ <= self.skip[page_collection]
 
     def crawl_page(self, page):
         # if ref != '':
@@ -110,9 +118,15 @@ class CrawlerClass:
 
     def crawl(self, url):
         page = UrlData(url)
+
         if self._dao.exists(COLL_URL_LIST, url=url):
             print "[Already Crawled] %s" % url
             self._dao.remove(COLL_UNFINISHED, url=url)
+            return
+
+        if self.whether_to_skip(page.collection):
+            self._dao.move_to_last(COLL_UNFINISHED, url=url)
+            print "Crawl [%s] %s later..." % (page.collection, url)
             return
 
         try:
@@ -134,9 +148,7 @@ class CrawlerClass:
             self.done_crawl(page)
 
         except Exception, ex:
-            self._dao.remove(COLL_UNFINISHED, url=url)
-            self._dao.insert(COLL_UNFINISHED, url=url, ref=page.ref)
-
+            self._dao.move_to_last(COLL_UNFINISHED, url=url)
             print "[Exception][%s] %s: %s" % (page.collection, url, ex)
 
         finally:
@@ -171,6 +183,12 @@ class CrawlerClass:
 
         print "Get proxy ip Done! total %d." % len(self._ip_list)
 
+    def set_skip_collections(self, collection, prob):
+        if type(prob) is not int or prob < 0 or prob > 100:
+            raise ValueError("Skip probability must be a [0,100] integer.")
+        self.skip[collection] = prob
+        print "Set skip prob: %s %d%%" % (collection, prob)
+
     def done_crawl(self, page):
         self._dao.insert(COLL_URL_LIST, url=page.url, ref=page.ref)
         self._dao.remove(COLL_UNFINISHED, url=page.url)
@@ -186,4 +204,8 @@ class CrawlerClass:
 if __name__ == "__main__":
     obj = CrawlerClass("dzdp")
     obj.update_ip_list()
+    obj.set_skip_collections("review", 50)
+    obj.set_skip_collections("member", 90)
+    obj.set_skip_collections("shop", 50)
+    obj.set_skip_collections("wishlist", 10)
     obj.setup(True)
