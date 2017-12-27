@@ -5,3 +5,4 @@ data/review_words/.DS_Store
 *.pyc
 data/*
 .idea/*
+crawler/__pycache__/

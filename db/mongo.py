@@ -55,6 +55,12 @@ class MyMongoDb:
         query = self.get_key_query(collection_name, dic)
         return self.exists(collection_name, **query)
 
+    def move_to_last(self, collection_name, **kv):
+        documents = self.get_all(collection_name, **kv)
+        for doc in documents:
+            self.remove(collection_name, **doc)
+            self.insert(collection_name, **doc)
+
     @staticmethod
     def get_key_query(collection_name, dic):
         query = {}
