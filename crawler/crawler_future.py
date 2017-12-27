@@ -52,7 +52,6 @@ RETRY_WAIT_TIME = 1
 THREAD_WAIT_UPPER = 60
 THREAD_WAIT_LOWER = 5
 MAX_WORKER_NUM = 5
-MAX_CRAWLING_NUM = 10
 
 
 class CrawlerClass:
@@ -183,29 +182,20 @@ class CrawlerClass:
 
         print "Get proxy ip Done! total %d." % len(self._ip_list)
 
-    def set_skip_collections(self, collection, prob):
-        if type(prob) is not int or prob < 0 or prob > 100:
-            raise ValueError("Skip probability must be a [0,100] integer.")
-        self.skip[collection] = prob
-        print "Set skip prob: %s %d%%" % (collection, prob)
+    def set_skip_collections(self, **cp):
+        for collection, prob in cp.iteritems():
+            if type(prob) is not int or prob < 0 or prob > 100:
+                raise ValueError("Skip probability illegal: [{0} {1}]".format(collection, prob))
+            self.skip[collection] = prob
+            print "Set skip prob: %s %d%%" % (collection, prob)
 
     def done_crawl(self, page):
         self._dao.insert(COLL_URL_LIST, url=page.url, ref=page.ref)
         self._dao.remove(COLL_UNFINISHED, url=page.url)
 
-    def setup(self, is_limited=False):
+    def setup(self, max_crawling_num, is_limited=False):
         start_time = time.time()
-        print "Start to crawl at most %d pages." % MAX_CRAWLING_NUM
+        print "Start to crawl at most %d pages." % max_crawling_num
         with futures.ThreadPoolExecutor(MAX_WORKER_NUM) as pool:
-            pool.map(self.crawl, self._dao.get_iter(COLL_UNFINISHED, is_limited, MAX_CRAWLING_NUM))
+            pool.map(self.crawl, self._dao.get_iter(COLL_UNFINISHED, is_limited, max_crawling_num))
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)
-
-
-if __name__ == "__main__":
-    obj = CrawlerClass("dzdp")
-    obj.update_ip_list()
-    obj.set_skip_collections("review", 50)
-    obj.set_skip_collections("member", 90)
-    obj.set_skip_collections("shop", 50)
-    obj.set_skip_collections("wishlist", 10)
-    obj.setup(True)
