@@ -2,6 +2,7 @@ import parser
 import random
 import time
 import urllib2
+import threading
 from bs4 import *
 from urldata import UrlData
 from concurrent import futures
@@ -68,6 +69,12 @@ class CrawlerClass:
         _ = random.randint(0, 100)
         return _ <= self.skip[page_collection]
 
+    def change_ip_weight(self, ip_no, add=True):
+        if add:
+            self._ip_weights[ip_no] = min(100, self._ip_weights[ip_no] + 3)
+        else:
+            self._ip_weights[ip_no] = max(1, self._ip_weights[ip_no] - 5)
+
     def crawl_page(self, page):
         # if ref != '':
         #   headers['Referer']=ref
@@ -97,17 +104,10 @@ class CrawlerClass:
                 crawled_data = url_parser.parse()
                 links = url_parser.get_links()
 
-                # Add weights for the ip we used
-                self._ip_weights[ip_no] = self._ip_weights[ip_no] + 3
-                if self._ip_weights[ip_no] > 100:
-                    self._ip_weights[ip_no] = 100
-                print "[Crawled][%s] %s #%d %s, weight: %d" %\
-                      (page.collection, page.url, i+1, proxy_ip, self._ip_weights[ip_no])
+                self.change_ip_weight(ip_no)
                 return crawled_data, links
             except Exception:
-                self._ip_weights[ip_no] -= 5
-                if self._ip_weights[ip_no] < 1:
-                    self._ip_weights[ip_no] = 1
+                self.change_ip_weight(ip_no, False)
 
                 if i < RETRY_MAX_TIMES - 1:
                     time.sleep(RETRY_WAIT_TIME)
@@ -125,7 +125,7 @@ class CrawlerClass:
 
         if self.whether_to_skip(page.collection):
             self._dao.move_to_last(COLL_UNFINISHED, url=url)
-            print "Crawl [%s] %s later..." % (page.collection, url)
+            # print "Crawl [%s] %s later..." % (page.collection, url)
             return
 
         try:
@@ -144,11 +144,13 @@ class CrawlerClass:
                 if self._dao.exists(COLL_URL_LIST, url=link.url) or self._dao.exists(COLL_UNFINISHED, url=link.url):
                     continue
                 self._dao.insert(COLL_UNFINISHED, url=link.url)
+
             self.done_crawl(page)
+            print "[%s][Crawled][%s] %s" % (threading.currentThread().getName(), page.collection, url)
 
         except Exception, ex:
             self._dao.move_to_last(COLL_UNFINISHED, url=url)
-            print "[Exception][%s] %s: %s" % (page.collection, url, ex)
+            print "[%s][Exception][%s] %s: %s" % (threading.currentThread().getName(), page.collection, url, ex)
 
         finally:
             time.sleep(random.randint(THREAD_WAIT_LOWER, THREAD_WAIT_UPPER))
@@ -195,7 +197,9 @@ class CrawlerClass:
 
     def setup(self, max_crawling_num, is_limited=False):
         start_time = time.time()
-        print "Start to crawl at most %d pages." % max_crawling_num
+        if is_limited:
+            print "Start to crawl at most %d pages." % max_crawling_num
+
         with futures.ThreadPoolExecutor(MAX_WORKER_NUM) as pool:
             pool.map(self.crawl, self._dao.get_iter(COLL_UNFINISHED, is_limited, max_crawling_num))
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)
