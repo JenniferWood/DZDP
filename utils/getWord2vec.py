@@ -7,6 +7,7 @@ import time
 import os
 from gensim.models import word2vec
 from db import mongo
+from sentences import MySentences
 
 MODEL_FILE = '../models/fasttext_model_review_word_skipgram'
 Train_File_Format = '../data/review_words/review_words_%s.data'
@@ -23,18 +24,6 @@ EMOJI_PATTERN = re.compile(
     u"(\ud83d[\ude80-\udeff])|"  # transport & map symbols
     u"(\ud83c[\udde0-\uddff])"  # flags (iOS)
     "+", flags=re.UNICODE)
-
-
-class MySentences(object):
-    """docstring for MySentences"""
-
-    def __init__(self, filename):
-        self._file_name = filename
-
-    def __iter__(self):
-        with open(self._file_name, 'r') as fopen:
-            for line in fopen:
-                yield line.split()
 
 
 def get_stop_words():
