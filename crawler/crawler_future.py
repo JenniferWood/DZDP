@@ -3,6 +3,7 @@ import random
 import time
 import urllib2
 import threading
+import socket
 from bs4 import *
 from urldata import UrlData
 from concurrent import futures
@@ -56,6 +57,10 @@ MAX_WORKER_NUM = 5
 
 
 class CrawlerClass:
+
+    crawl_num = 0
+    success_num = 0
+
     def __init__(self, db_name):
         self._dao = mongo.MyMongoDb(db_name)
         self._ip_list = ["127.0.0.1"]
@@ -116,10 +121,15 @@ class CrawlerClass:
                 raise
 
     def crawl(self, url):
+        CrawlerClass.crawl_num += 1
+        if CrawlerClass.crawl_num % 10 == 0:
+            print "==============crawl_num: %d success_num: %d==============" % \
+                  (CrawlerClass.crawl_num, CrawlerClass.success_num)
+
         page = UrlData(url)
 
         if self._dao.exists(COLL_URL_LIST, url=url):
-            print "[Already Crawled] %s" % url
+            # print "[Already Crawled] %s" % url
             self._dao.remove(COLL_UNFINISHED, url=url)
             return
 
@@ -146,11 +156,15 @@ class CrawlerClass:
                 self._dao.insert(COLL_UNFINISHED, url=link.url)
 
             self.done_crawl(page)
-            print "[%s][Crawled][%s] %s" % (threading.currentThread().getName(), page.collection, url)
+            CrawlerClass.success_num += 1
+            print "[%s][Crawled][%s]" % (threading.currentThread().getName(), page.collection)
 
-        except Exception, ex:
+        except (urllib2.URLError, urllib2.HTTPError, socket.error):
             self._dao.move_to_last(COLL_UNFINISHED, url=url)
-            print "[%s][Exception][%s] %s: %s" % (threading.currentThread().getName(), page.collection, url, ex)
+            # print "[%s][Exception][%s] %s: %s" % (threading.currentThread().getName(), page.collection, url, ex)
+        except (ValueError, AttributeError), ex:
+            self._dao.move_to_last(COLL_UNFINISHED, url=url)
+            print "[%s] %s: %s" % (threading.currentThread().getName(), url, ex)
 
         finally:
             time.sleep(random.randint(THREAD_WAIT_LOWER, THREAD_WAIT_UPPER))
