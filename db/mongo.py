@@ -22,8 +22,8 @@ class MyMongoDb:
     def remove(self, collection_name, **kv):
         self._db[collection_name].remove(kv)
 
-    def update(self, collection_name, query_dic, update_dic, upsert=True):
-        self._db[collection_name].update(query_dic, {'$set': update_dic}, upsert=upsert)
+    def update(self, collection_name, query_dic, update_dic, upsert=True, multi=True):
+        self._db[collection_name].update(query_dic, {'$set': update_dic}, upsert=upsert, multi=multi)
 
     def insert_with_update(self, collection_name, json):
         query = self.get_key_query(collection_name, json)

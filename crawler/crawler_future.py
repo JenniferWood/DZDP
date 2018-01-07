@@ -144,10 +144,6 @@ class CrawlerClass:
             # Insert
             for data in crawled_data:
                 self._dao.insert_with_update(page.collection, data)
-                if page.collection == COLL_REVIEW:
-                    db_content = self._dao.get_one(page.collection, **data)
-                    if "got" not in db_content:
-                        self._dao.update(page.collection, data, {"got": False})
 
             # Next Links
             for link in links:

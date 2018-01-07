@@ -13,6 +13,8 @@ COLLECTION_MAP = {
 
 class UrlData:
     def __init__(self, url, ref='', **kv):
+        if not url.startswith('http://'):
+            url = 'http://' + url
         self.url = url.strip('/')
         self.url = self.url.split('#')[0]
         self.type = ''

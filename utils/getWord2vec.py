@@ -48,7 +48,8 @@ def get_raw_data(tick):
         wid = dao.get_data_size("word")
 
         try:
-            for review_item in dao.get_all("review", got=False):
+            review_query = {"$nor": [{"got": True}]}
+            for review_item in dao.get_all("review", **review_query):
                 shop_id = review_item["shop-id"]
                 if not dao.exists("shop", id=shop_id):
                     continue
