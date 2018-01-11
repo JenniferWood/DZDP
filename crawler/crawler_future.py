@@ -121,6 +121,10 @@ class CrawlerClass:
                 raise
 
     def crawl(self, url):
+        if not url.startswith('http://'):
+            self._dao.update("unfinished", {"url": url}, {"url": "http://"+url}, False)
+            url = "http://"+url
+
         CrawlerClass.crawl_num += 1
         if CrawlerClass.crawl_num % 10 == 0:
             print "==============crawl_num: %d success_num: %d==============" % \
@@ -131,6 +135,7 @@ class CrawlerClass:
         if self._dao.exists(COLL_URL_LIST, url=url):
             # print "[Already Crawled] %s" % url
             self._dao.remove(COLL_UNFINISHED, url=url)
+            CrawlerClass.success_num += 1
             return
 
         if self.whether_to_skip(page.collection):
@@ -144,6 +149,9 @@ class CrawlerClass:
             # Insert
             for data in crawled_data:
                 self._dao.insert_with_update(page.collection, data)
+                if page.collection in ["wishlist", "review"]:
+                    for coll in ["member", "shop"]:
+                        self._dao.update(coll, {"id": data["%s-id" % coll]}, {"item2vec": False})
 
             # Next Links
             for link in links:
@@ -153,15 +161,14 @@ class CrawlerClass:
 
             self.done_crawl(page)
             CrawlerClass.success_num += 1
-            print "[%s][Crawled][%s]" % (threading.currentThread().getName(), page.collection)
+            print "[%s][Crawled][%s] %s" % (threading.currentThread().getName(), page.collection, page.url)
 
         except (urllib2.URLError, urllib2.HTTPError, socket.error):
             self._dao.move_to_last(COLL_UNFINISHED, url=url)
             # print "[%s][Exception][%s] %s: %s" % (threading.currentThread().getName(), page.collection, url, ex)
-        except (ValueError, AttributeError), ex:
+        except (ValueError, AttributeError, Exception), ex:
             self._dao.move_to_last(COLL_UNFINISHED, url=url)
             print "[%s] %s: %s" % (threading.currentThread().getName(), url, ex)
-
         finally:
             time.sleep(random.randint(THREAD_WAIT_LOWER, THREAD_WAIT_UPPER))
 

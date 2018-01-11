@@ -91,12 +91,14 @@ class ShopParser(ParserFactory):
         # print "SHOP:",self.soup.text
         if self.soup.find(class_="shop-closed") is not None:
             self.skip = True
+            print "Shop %s is closed. -> %s" % (self._url_data.id, self._url_data.url)
             return []
 
         breadcrumb = self.soup.find(class_="breadcrumb")
         categories = breadcrumb('a')
         if categories[0].text.strip() != u'北京美食':
             self.skip = True
+            print "Shop %s is not in Beijing. -> %s" % (self._url_data.id, self._url_data.url)
             return []
 
         # How to optimize this 'category' thing?
@@ -170,9 +172,10 @@ class ReviewParser(ParserFactory):
     def parse(self):
         review = {"id": self._url_data.id}
 
-        nav_w = self.soup.select(".nav_w .B")
+        nav_w = self.soup.select(".detail-crumb a")
         if len(nav_w) == 0 or nav_w[0].text.strip() != u'北京美食':
             self.skip = True
+            print "Review %s is not for shop in Beijing. -> %s" % (self._url_data.id, self._url_data.url)
             return []
 
         id_pattern = r'(\d+)'
@@ -182,53 +185,53 @@ class ReviewParser(ParserFactory):
         shop_id_res = self.search_by_regex(id_pattern, shop_info['href'])
         review["shop-id"] = shop_id_res[0]
 
-        cont_list = self.soup.find(class_="cont_list J_reviewRoot")
+        review_content_block = self.soup.find(class_="review-content")
         
         # member id
-        reviewer_info = cont_list.select(".B")[0]
-        reviewer_id_res = self.search_by_regex(id_pattern, reviewer_info['href'])
-        review["member-id"] = reviewer_id_res[0]
+        reviewer_info = review_content_block.find(class_=".dper-photo-aside")
+        review["member-id"] = reviewer_info["data-user-id"]
 
-        # review score info
-        start_block = cont_list.find(class_=re.compile('msstar'))
-        if start_block is not None:
-            star_str = cont_list.find(class_=re.compile('msstar'))['class'][0][-2:]
-            review["star"] = float(star_str)/10.0
+        # Review rank
+        review_rank = review_content_block.find(class_="review-rank")
+        star_block = review_rank.find(class_="star")
+        if star_block is not None:
+            review["star"] = float(star_block['class'][1][-2:]) / 10
 
-        score = [-1.0] * 3
-        key_pos = {u"口味": 0, u"环境": 1, u"服务": 2}
-        key_val_pattern = u'(.*)\s*：\s*(\d+)'
-        comment_rest = cont_list.select(".comment-rst .rst")
-        for rst in comment_rest:
-            key_val = self.search_by_regex(key_val_pattern, rst.text.strip())
-            score[key_pos[key_val[0]]] = float(key_val[1])
-        review["score"] = score
+        score_list = review_rank.select(".score .item")
+        key_val_pattern = u'(.+)\s*：\s*(.+)'
+        if len(score_list) > 0:
+            score = [-1.0] * 3
+            key_pos = {u"口味": 0, u"环境": 1, u"服务": 2}
+            des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
+            for _ in score_list:
+                key_val = self.search_by_regex(key_val_pattern, _.text.strip())
+                if key_val[0] not in key_pos and key_val[0] == u'人均':
+                    review["pay"] = int(key_val[1][0:key_val[1].index(u"元")])
+                else:
+                    score[key_pos[key_val[0]]] = des_value[key_val[1]]
+            review["score"] = score
 
-        # review text
-        review["comment"] = cont_list.find(class_="cont_list-con").text.strip()
+        # Review words
+        review["comment"] = review_content_block.find(class_="review-words").get_text(' ', 'br/')
 
-        # pay
-        comment_unit = cont_list.select(".comment-unit li")
-        pay_pattern = r'人均.+(\d+)元'
-        for e in comment_unit:
-            extra_comment_str = e.text.strip()
-            pay_str_res = self.search_by_regex(pay_pattern, extra_comment_str)
-            if pay_str_res is not None:
-                review["pay"] = int(pay_str_res[0])
-                break
+        # Commend
+        recommend_block = review_content_block.find(class_="review-recommend")
+        if recommend_block:
+            review["recommend"] = [dish.text.strip() for dish in recommend_block.select(".col-exp")]
 
-        cont_list_fn = self.soup.find(class_="cont_list-fn")
+        # Time
+        time_raw_str = review_content_block.find(class_="time").text.strip()
+        times = time_raw_str.split(u'更新于')
+        review["create-time"] = self.supplement_time_format(times[0].strip())
+        if len(times) > 1:
+            review["update-time"] = self.supplement_time_format(times[1])
 
-        # create-time
-        review["create-time"] = self.supplement_time_format(cont_list_fn.li.text.strip())
-        
-        # heart-num
-        heart_id = "btnFlower%s" % self._url_data.id
-        heart_res = self.search_by_regex(id_pattern, cont_list_fn.find(id=heart_id).text.strip())
-        if heart_res is None:
-            review["heart-num"] = 0
+        # Heart
+        heart_num_block = review_content_block.find(class_="favor").find_previous_sibling('em')
+        if heart_num_block is not None:
+            review["heart-num"] = int(heart_num_block.text.strip("(|)"))
         else:
-            review["heart-num"] = int(heart_res[0])
+            review["heart-num"] = 0
 
         return [review]
 
@@ -238,6 +241,7 @@ class ShopReviewsParser(ParserFactory):
         res = []
         if self.soup.find(class_="errorMessage") is not None:
             self.skip = True
+            print "Shop %s is closed. -> %s" % (self._url_data.id, self._url_data.url)
             return []
 
         comment_list = self.soup.select(".reviews-items > ul > li")
@@ -257,25 +261,31 @@ class ShopReviewsParser(ParserFactory):
 
             # Review rank
             review_rank = comment_block.find(class_="review-rank")
-            start_block = review_rank.find(class_="star")
-            if start_block is not None:
-                review["star"] = float(start_block['class'][1][-2:]) / 10
+            star_block = review_rank.find(class_="star")
+            if star_block is not None:
+                review["star"] = float(star_block['class'][1][-2:]) / 10
 
             score_list = review_rank.select(".score .item")
-            key_val_pattern = u'(.*)\s*：\s*(\d+)'
+            key_val_pattern = u'(.+)\s*：\s*(.+)'
             if len(score_list) > 0:
                 score = [-1.0] * 3
                 key_pos = {u"口味": 0, u"环境": 1, u"服务": 2}
+                des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
                 for _ in score_list:
                     key_val = self.search_by_regex(key_val_pattern, _.text.strip())
                     if key_val[0] not in key_pos and key_val[0] == u'人均':
-                        review["pay"] = int(key_val[1])
+                        review["pay"] = int(key_val[1][0:key_val[1].index(u"元")])
                     else:
-                        score[key_pos[key_val[0]]] = float(key_val[1])
+                        score[key_pos[key_val[0]]] = des_value[key_val[1]]
                 review["score"] = score
 
             # Review words
-            review["comment"] = comment_block.find(class_="review-words").get_text('\n', 'br/')
+            review["comment"] = comment_block.find(class_="review-words").get_text(' ', 'br/')
+
+            # Commend
+            recommend_block = comment_block.find(class_="review-recommend")
+            if recommend_block:
+                review["recommend"] = [dish.text.strip() for dish in recommend_block.select(".col-exp")]
 
             # Time
             time_raw_str = comment_block.find(class_="time").text.strip()
@@ -308,6 +318,9 @@ class MemberReviewsParser(ParserFactory):
         res = []
 
         comment_list = self.soup.select(".txt.J_rptlist")
+        if len(comment_list) == 0:
+            raise ValueError("The page is not what we want.")
+
         for comment_block in comment_list:
             j_report = comment_block.find(class_="j_report")
             shop_id = str(j_report["data-sid"])
@@ -356,6 +369,9 @@ class MemberReviewsParser(ParserFactory):
 class MemberWishlistParser(ParserFactory):
     def parse(self):
         res = []
+        if self.soup.select(".modebox.p-tabs-box") is None:
+            raise ValueError("The page is not what we want.")
+
         favor_list = self.soup.select(".pic-txt.favor-list li")
 
         for favorShop in favor_list:
