@@ -1,4 +1,4 @@
-from pymongo import MongoClient
+import pymongo
 
 COLL_KEY = {
     "member": (1, "id"),
@@ -11,7 +11,7 @@ COLL_KEY = {
 
 
 class MyMongoDb:
-    _con = MongoClient("localhost", 27017)
+    _con = pymongo.MongoClient("localhost", 27017)
 
     def __init__(self, db_name):
         self._db = MyMongoDb._con[db_name]
@@ -31,6 +31,9 @@ class MyMongoDb:
 
     def get_all(self, collection_name, **kv):
         return self._db[collection_name].find(kv)
+
+    def get_and_sort(self, collection_name, sort_key, sort_order=pymongo.DESCENDING, **kv):
+        return self.get_all(collection_name, **kv).sort(sort_key, sort_order)
 
     def get_one(self, collection_name, **kv):
         return self._db[collection_name].find_one(kv)

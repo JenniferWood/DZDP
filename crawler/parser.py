@@ -170,10 +170,13 @@ class MemberParser(ParserFactory):
 
 class ReviewParser(ParserFactory):
     def parse(self):
+        if self.soup.find(class_="not-found"):
+            raise ValueError("Crawler has been captured !!!")
+
         review = {"id": self._url_data.id}
 
         nav_w = self.soup.select(".detail-crumb a")
-        if len(nav_w) == 0 or nav_w[0].text.strip() != u'北京美食':
+        if nav_w[0].text.strip() != u'北京美食':
             self.skip = True
             print "Review %s is not for shop in Beijing. -> %s" % (self._url_data.id, self._url_data.url)
             return []
@@ -238,6 +241,9 @@ class ReviewParser(ParserFactory):
 
 class ShopReviewsParser(ParserFactory):
     def parse(self):
+        if self.soup.find(class_="not-found"):
+            raise ValueError("Crawler has been captured !!!")
+
         res = []
         if self.soup.find(class_="errorMessage") is not None:
             self.skip = True

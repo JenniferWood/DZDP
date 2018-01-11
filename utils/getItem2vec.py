@@ -9,10 +9,8 @@ from utils import DbDataProcess
 ID_FILE_PATH = "../data/embedding/%s_id"
 MODEL_PATH = "../models/model_%s"
 DAO = mongo.MyMongoDb("dzdp")
-THREAD_LOCAL = threading.local()
 
-BATCH_LINES = 5000
-LEAST_REVIEW_THRESHOLD = 5
+LEAST_REVIEW_THRESHOLD = 10
 END_FLAG = False
 
 
@@ -21,7 +19,6 @@ def write_list_to_file(fw, a_list, min_sent_len=0):
         return
 
     fw.write('%s\n' % (' '.join(a_list)))
-    THREAD_LOCAL.sents.append(a_list)
 
 
 def write_lists(fw, *lists):
@@ -56,30 +53,30 @@ def get_lists(dim):
     symmetrical_key_name = "%s-id" % symmetrical_dim
     dim_key_name = "%s-id" % dim
 
-    THREAD_LOCAL.train_cnt = 0
-    THREAD_LOCAL.sents = []
-    THREAD_LOCAL.dim = dim
-
-    with open(file_name, 'w') as fwrite:
+    with open(file_name, 'a') as fwrite:
         query = {"$nor": [{"item2vec": True}]}
         cursor = DAO.get_all(symmetrical_dim, **query)
         print "Get %s now. %d %ss in total." % (file_name, cursor.count(), symmetrical_dim)
 
         try:
+            i = 0
             for item in cursor:
                 if END_FLAG:
                     break
 
-                if len(THREAD_LOCAL.sents) >= BATCH_LINES:
-                    train(THREAD_LOCAL.dim, THREAD_LOCAL.train_cnt, THREAD_LOCAL.sents)
-                    THREAD_LOCAL.train_cnt += 1
-                    THREAD_LOCAL.sents = []
+                wishlist_cursor = DAO.get_all("wishlist", **{symmetrical_key_name: item["id"]})
+                review_cursor = DAO.get_all("review", **{symmetrical_key_name: item["id"]})
+                if wishlist_cursor.count() + review_cursor.count() <= LEAST_REVIEW_THRESHOLD:
+                    continue
 
+                if i % 1000 == 0:
+                    print "[%s] %d" % (dim, i)
+                i += 1
+
+                wish_list = [dim_item[dim_key_name] for dim_item in wishlist_cursor]
                 good_review = []
                 bad_review = []
-                review_cursor = DAO.get_all("review", **{symmetrical_key_name: item["id"]})
-                if review_cursor.count() <= LEAST_REVIEW_THRESHOLD:
-                    continue
+
                 for review_item in review_cursor:
                     dim_id = review_item[dim_key_name]
 
@@ -91,17 +88,12 @@ def get_lists(dim):
                     else:
                         bad_review.append(dim_id)
 
-                dim_items = DAO.get_all("wishlist", **{symmetrical_key_name: item["id"]})
-                wish_list = [dim_item[dim_key_name] for dim_item in dim_items]
-
                 write_lists(fwrite, wish_list, good_review, bad_review)
                 DAO.update(symmetrical_dim, item, {"item2vec": True})
         except Exception, e:
             print "%s: %s" % (threading.currentThread().getName(), e)
         finally:
             print "%s is closing..." % threading.currentThread().getName()
-            if len(THREAD_LOCAL.sents) > 0:
-                train(THREAD_LOCAL.dim, THREAD_LOCAL.train_cnt, THREAD_LOCAL.sents)
 
 
 @timing
@@ -117,4 +109,4 @@ def main(minutes):
 
 
 if __name__ == '__main__':
-    main(40)
+    main(30)
