@@ -249,6 +249,12 @@ class ShopReviewsParser(ParserFactory):
             print "Shop %s is closed. -> %s" % (self._url_data.id, self._url_data.url)
             return []
 
+        nav_w = self.soup.select(".list-crumb a")
+        if nav_w[0].text.strip() != u'北京美食':
+            self.skip = True
+            print "Review %s is not for shop in Beijing. -> %s" % (self._url_data.id, self._url_data.url)
+            return []
+
         comment_list = self.soup.select(".reviews-items > ul > li")
         if len(comment_list) == 0:
             raise ValueError("The page is not what we want.")

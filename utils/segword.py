@@ -65,7 +65,7 @@ class WordSegmentation:
                 wid += 1
             yield word
 
-    def cut_with_pos(self, s, with_pos=False):
+    def cut_with_pos(self, s):
         words = posseg.cut(s)
 
         wid = DAO.get_data_size(WORD_DICT)

@@ -9,6 +9,7 @@ def load_param(conf_file):
     p = {}
     with open(conf_file, 'r') as f_open:
         for line in f_open:
+            line = line.strip()
             k_v = line.split(' ')
             p[k_v[0]] = int(k_v[1])
             print line

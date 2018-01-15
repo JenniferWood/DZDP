@@ -4,7 +4,7 @@ import os.path as ospath
 from db import mongo
 from concurrent import futures
 from gensim.models import word2vec
-from utils import DbDataProcess
+from utils import FileSentences
 
 ID_FILE_PATH = "../data/embedding/%s_id"
 MODEL_PATH = "../models/model_%s"
@@ -27,36 +27,47 @@ def write_lists(fw, *lists):
 
 
 def timing(func):
+    units = ("h", "m", "s")
+
     def operate(*args, **kwargs):
         start_time = time.time()
         func(*args, **kwargs)
-        print "-----[%s]-----> %f seconds." % (func.__name__, time.time()-start_time)
+        second = int(time.time()-start_time)
+
+        hour = second / 3600
+        second %= 3600
+
+        minute = second / 60
+        second %= 60
+
+        time_split = (str(hour), str(minute), str(second))
+        time_expression = ' '.join(map(''.join, zip(time_split, units)))
+
+        print "-----[%s]-----> %s." % (func.__name__, time_expression)
     return operate
 
 
 @timing
-def train(dim, times, sentences):
-    print "train(dim=%s, times=%d, sentences_len=%d...)" % (dim, times, len(sentences))
+def train(dim):
+    print "Training model for %s..." % dim
     model_file = MODEL_PATH % dim
-    if not ospath.exists(model_file):
-        print "First Training..."
-        model = word2vec.Word2Vec(sentences, size=256, sg=1, negative=100, iter=10)
-    else:
-        model = word2vec.Word2Vec.load(model_file)
-        model.train(sentences, total_examples=len(sentences), epochs=model.iter)
+    sentences = FileSentences(ospath.abspath(ID_FILE_PATH % dim))
+
+    model = word2vec.Word2Vec(sentences, size=100, window=15, min_count=1, negative=15, iter=10, workers=4)
+
     model.save(model_file)
 
 
 def get_lists(dim):
     file_name = ID_FILE_PATH % dim
-    symmetrical_dim = {"shop": "member", "member": "shop"}.get(dim)
-    symmetrical_key_name = "%s-id" % symmetrical_dim
+    sym_dim = {"shop": "member", "member": "shop"}.get(dim)
+    sym_key_name = "%s-id" % sym_dim
     dim_key_name = "%s-id" % dim
 
     with open(file_name, 'a') as fwrite:
         query = {"$nor": [{"item2vec": True}]}
-        cursor = DAO.get_all(symmetrical_dim, **query)
-        print "Get %s now. %d %ss in total." % (file_name, cursor.count(), symmetrical_dim)
+        cursor = DAO.get_all(sym_dim, **query)
+        print "Get %s now. %d %ss in total." % (file_name, cursor.count(), sym_dim)
 
         try:
             i = 0
@@ -64,36 +75,26 @@ def get_lists(dim):
                 if END_FLAG:
                     break
 
-                wishlist_cursor = DAO.get_all("wishlist", **{symmetrical_key_name: item["id"]})
-                review_cursor = DAO.get_all("review", **{symmetrical_key_name: item["id"]})
+                wishlist_cursor = DAO.get_all("wishlist", **{sym_key_name: item["id"]})
+                review_cursor = DAO.get_all("review", **{sym_key_name: item["id"]})
                 if wishlist_cursor.count() + review_cursor.count() <= LEAST_REVIEW_THRESHOLD:
+                    DAO.move_to_last(sym_dim, **item)
                     continue
 
-                if i % 1000 == 0:
-                    print "[%s] %d" % (dim, i)
+                if i % 100 == 0:
+                    print "[%s] %d" % (sym_dim, i)
                 i += 1
 
                 wish_list = [dim_item[dim_key_name] for dim_item in wishlist_cursor]
-                good_review = []
-                bad_review = []
+                review_list = [review_item[dim_key_name] for review_item in review_cursor]
 
-                for review_item in review_cursor:
-                    dim_id = review_item[dim_key_name]
-
-                    score = DbDataProcess.get_review_overall_score(
-                        review_item.get('star',None), review_item.get('score',None))
-
-                    if score >= 3.0:
-                        good_review.append(dim_id)
-                    else:
-                        bad_review.append(dim_id)
-
-                write_lists(fwrite, wish_list, good_review, bad_review)
-                DAO.update(symmetrical_dim, item, {"item2vec": True})
+                write_lists(fwrite, wish_list, review_list)
+                DAO.update(sym_dim, item, {"item2vec": True})
         except Exception, e:
             print "%s: %s" % (threading.currentThread().getName(), e)
         finally:
             print "%s is closing..." % threading.currentThread().getName()
+            train(dim)
 
 
 @timing

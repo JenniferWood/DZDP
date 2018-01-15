@@ -5,6 +5,7 @@ import random
 import threading
 import heapq
 import numpy as np
+from collections import Counter
 from gensim.models import word2vec
 from segword import WordSegmentation
 from db import mongo
@@ -101,7 +102,57 @@ def get_dis_near(kd_tree_root, point, dis):
                 parent = parent.right
             trace += get_trace(parent, point)
 
-    return sorted(dis_near_heap)
+    dis_near_heap.sort()
+    return dis_near_heap
+
+
+def predict_proba(i_word, o_word):
+    i_word_vec = w2v_model[i_word]
+    o_word = w2v_model.wv.vocab[o_word]
+    o_word_l = w2v_model.syn1[o_word.point].T
+    dot = np.dot(i_word_vec, o_word_l)
+    l_prob = -sum(np.logaddexp(0, -dot) + o_word.code*dot)
+    return l_prob
+
+
+def get_key_words_from(paragraph, top_k):
+    word_weight = {}
+    w_cnt = 0
+    
+    for w_pos in word_seg.cut_with_pos(paragraph):
+        w = w_pos[0].encode('utf-8')
+
+        if w not in w2v_model:
+            continue
+
+        w_cnt += 1
+        
+        p_w = 0
+        cache = {}
+        for existed_word in word_weight:
+            _e_w = "_".join([existed_word, w])
+            _w_e = "_".join([w, existed_word])
+
+            if _e_w not in cache:
+                cache[_e_w] = predict_proba(existed_word, w)
+
+            if _w_e not in cache:
+                cache[_w_e] = predict_proba(w, existed_word)
+
+            p_ew = cache[_e_w]
+            p_we = cache[_w_e]
+
+            word_weight[existed_word] += p_ew
+            p_w += p_we
+
+        if w_pos[1] not in expected_pos:
+            continue
+
+        word_weight.setdefault(w, 0)
+        word_weight[w] += p_w
+
+    word_weight_pairs = Counter(word_weight).most_common(top_k)
+    return [pair[0] for pair in word_weight_pairs]
 
 
 def extract_key_words(paragraph, top_k, allow_pos=None):
@@ -139,7 +190,7 @@ def get_optimal_eps(key_words, kd_tree, min_pts):
         k_near = get_k_near(kd_tree, w2v_model[word], min_pts)
         e.append(k_near[min_pts - 1][0])
 
-    e = sorted(e)
+    e.sort()
     eps = e[int(0.1 * len(key_words))]
 
     for i in range(len(key_words)):
@@ -195,7 +246,7 @@ def db_scan(kd_tree, key_words, min_pts=4):
     return _m
 
 
-def mearge_list(list1, list2):
+def merge_list(list1, list2):
     if not isinstance(list1, list) or not isinstance(list2, list):
         raise ValueError("Input should be list.")
 
@@ -212,7 +263,6 @@ def get_time_interval(string):
 
 
 def main(dim, threshold=5):
-    global start_time
     dim_key_name = "%s-id" % dim
 
     THREAD_LOCAL.train_cnt = 0
@@ -230,16 +280,26 @@ def main(dim, threshold=5):
                 break
 
             review_cursor = DAO.get_all("review", **{dim_key_name: item["id"]})
-            if review_cursor.count() <= threshold:
+            review_num = review_cursor.count()
+            print "got %d reviews for %s %s" % (review_num, dim, item["id"])
+
+            if review_num <= threshold:
                 continue
 
+            key_words = []
+            for review_item in review_cursor:
+                merge_list(key_words, extract_key_words(review_item["comment"], 5, expected_pos))
+            get_time_interval("Get key words")
+                
+            '''TFIDF
             whole_review = '\n'.join([review_item["comment"] for review_item in review_cursor])
             get_time_interval("Get whole reviews for %s" % item["id"])
 
-            top_k = max(20, 2*review_cursor.count())
+            top_k = max(20, 2*review_num)
             key_words = extract_key_words(whole_review, top_k, expected_pos)
             get_time_interval("Get top %d key words" % top_k)
-            # mearge_list(key_words, textrank(whole_review, top_k))
+            # merge_list(key_words, textrank(whole_review, top_k))
+            '''
 
             if len(key_words) > WORDVEC_SIZE:
                 kd_tree = create_kd_tree(key_words)
@@ -254,13 +314,15 @@ def main(dim, threshold=5):
 
                     if len(cluster[c]) > 1:
                         center_coor = sum([w2v_model[word] for word in cluster[c]]) / len(cluster[c])
-                        center_word = get_k_near(kd_tree, center_coor, 1, True)[0][1].word
+                        center_word = get_k_near(create_kd_tree(cluster[c]), center_coor, 1, True)[0][1].word
                     else:
                         center_word = cluster[c][0]
 
                     key_words.append(center_word)
-                print " ".join(key_words)
+
                 get_time_interval("Update key word list")
+
+            print " ".join(key_words)
 
 
 
