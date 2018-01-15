@@ -64,7 +64,8 @@ def train_model(model_file, has_model=False, sentence_num=None):
         update_num = model.train(sentences, total_examples=sentence_num, epochs=model.iter)
         print 'Update %d Words' % update_num
     else:
-        model = word2vec.Word2Vec(sentences, size=256, window=10, min_count=64, sg=1, hs=1, iter=10, workers=4)
+        # model = word2vec.Word2Vec(sentences, size=150, window=5, min_count=20, sg=1, hs=1, iter=10, workers=4)
+        model = word2vec.Word2Vec(sentences, size=200, min_count=20, workers=4, negative=15)
 
     model.save(model_file)
     end = time.time()
@@ -72,12 +73,16 @@ def train_model(model_file, has_model=False, sentence_num=None):
 
 
 if __name__ == '__main__':
+    train_model("../models/model_review_words_cbow_ns")
+
     init('./fooddict.txt')
 
     try:
         while True:
             sent_num = get_raw_data()
             print "\nGet Sentences : %d" % sent_num
+
+            if sent_num == 0: break
             time.sleep(120)
     except KeyboardInterrupt:
         print "See You Tomorrow...O(∩_∩)O~~"

@@ -49,12 +49,6 @@ COLL_REVIEW = "review"
 COLL_UNFINISHED = "unfinished"
 COLL_URL_LIST = "urllist"
 
-RETRY_MAX_TIMES = 5
-RETRY_WAIT_TIME = 1
-THREAD_WAIT_UPPER = 60
-THREAD_WAIT_LOWER = 5
-MAX_WORKER_NUM = 5
-
 
 class CrawlerClass:
 
@@ -66,6 +60,13 @@ class CrawlerClass:
         self._ip_list = ["127.0.0.1"]
         self._ip_weights = [5]
         self.skip = {}
+
+        # default
+        self.retry_max_times = 5
+        self.retry_wait_time = 1
+        self.thread_wait_upper = 300
+        self.thread_wait_lower = 60
+        self.max_worker_num = 5
 
     def whether_to_skip(self, page_collection):
         if page_collection not in self.skip:
@@ -84,7 +85,7 @@ class CrawlerClass:
         # if ref != '':
         #   headers['Referer']=ref
 
-        for i in range(RETRY_MAX_TIMES):
+        for i in range(self.retry_max_times):
             req = urllib2.Request(url=page.url, headers=random.choice(HEADER_LIST))
             req.add_header('Host', 'www.dianping.com')
 
@@ -114,8 +115,8 @@ class CrawlerClass:
             except Exception:
                 self.change_ip_weight(ip_no, False)
 
-                if i < RETRY_MAX_TIMES - 1:
-                    time.sleep(RETRY_WAIT_TIME)
+                if i < self.retry_max_times - 1:
+                    time.sleep(self.retry_wait_time)
                     continue
 
                 raise
@@ -170,7 +171,7 @@ class CrawlerClass:
             self._dao.move_to_last(COLL_UNFINISHED, url=url)
             print "[%s] %s: %s" % (threading.currentThread().getName(), url, ex)
         finally:
-            time.sleep(random.randint(THREAD_WAIT_LOWER, THREAD_WAIT_UPPER))
+            time.sleep(random.randint(self.thread_wait_lower, self.thread_wait_upper))
 
     def pick_ip_randomly(self):
         x = random.randint(0, sum(self._ip_weights)-1)
@@ -217,6 +218,6 @@ class CrawlerClass:
         if is_limited:
             print "Start to crawl at most %d pages." % max_crawling_num
 
-        with futures.ThreadPoolExecutor(MAX_WORKER_NUM) as pool:
+        with futures.ThreadPoolExecutor(self.max_worker_num) as pool:
             pool.map(self.crawl, self._dao.get_iter(COLL_UNFINISHED, is_limited, max_crawling_num))
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)

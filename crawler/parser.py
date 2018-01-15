@@ -88,8 +88,7 @@ class ParserFactory:
 
 class ShopParser(ParserFactory):
     def parse(self):
-        # print "SHOP:",self.soup.text
-        if self.soup.find(class_="shop-closed") is not None:
+        if self.soup.find(class_="shop-closed"):
             self.skip = True
             print "Shop %s is closed. -> %s" % (self._url_data.id, self._url_data.url)
             return []

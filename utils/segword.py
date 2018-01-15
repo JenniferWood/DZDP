@@ -3,6 +3,7 @@ import sys
 import re
 import jieba
 import jieba.posseg as posseg
+from jieba import analyse
 from db import mongo
 
 reload(sys)
@@ -50,12 +51,8 @@ class WordSegmentation:
             s = s.decode()
         return SPECIAL_CHAR_PATTERN.sub('', s.strip())
 
-    def cut(self, s, with_pos=False):
-        split_method = jieba
-        if with_pos:
-            split_method = posseg
-
-        words = split_method.cut(s)
+    def cut(self, s):
+        words = jieba.cut(s)
 
         wid = DAO.get_data_size(WORD_DICT)
         for word in words:
@@ -67,3 +64,20 @@ class WordSegmentation:
                 print "[%s %d]" % (word, wid)
                 wid += 1
             yield word
+
+    def cut_with_pos(self, s, with_pos=False):
+        words = posseg.cut(s)
+
+        wid = DAO.get_data_size(WORD_DICT)
+        for word in words:
+            w = self.remove_special_char(word.word)
+            if not w or w in self._stop_words:
+                continue
+            if not DAO.get_one(WORD_DICT, word=w):
+                DAO.insert(WORD_DICT, _id=wid, word=w)
+                print "[%s %d]" % (w, wid)
+                wid += 1
+            yield (w, word.flag)
+
+    def extract_key_words(self, paragraph, top_k, allow_pos=None):
+        return analyse.extract_tags(paragraph, top_k, allowPOS=allow_pos)

@@ -1,90 +1,118 @@
 # -*- coding: utf-8 -*-
 
+import time
 import random
 import threading
+import heapq
 import numpy as np
-import jieba.posseg as posseg
 from gensim.models import word2vec
-from collections import Counter
+from segword import WordSegmentation
 from db import mongo
-from jieba import analyse
-tfidf = analyse.extract_tags
-textrank = analyse.textrank
 
 THREAD_LOCAL = threading.local()
 DAO = mongo.MyMongoDb('dzdp')
 END_FLAG = False
+WORDVEC_SIZE = 200
 
-w2v_model = word2vec.Word2Vec.load('../models/model_review_words')
+w2v_model = word2vec.Word2Vec.load('../models/model_review_words_cbow_ns')
+user_dict = "./fooddict.txt"
+stop_words = "./stopwords.txt"
+# expected_pos = ('Ag', 'a', 'ad', 'an', 'd', 'i', 'l', 'Ng', 'n', 'ns', 'nt', 'nz', 't', 'vn', 'vg', 'vd')
+expected_pos = ('a', 'ad', 'an', 'i', 'l', 'n', 'ns', 'nz', 'vn', 'vg', 'vd')
 
-stop_words = [word.strip().decode('utf-8') for word in open('stopwords.txt')]
-expected_pos = ['Ag', 'a', 'ad', 'an', 'd', 'i', 'l', 'Ng', 'n', 'ns', 'nt', 'nz', 't', 'vn', 'vg', 'vd']
+word_seg = WordSegmentation(stop_words, user_dict)
 
 
-def extract_key_words(paragraph, top_k):
-    key_words = tfidf(paragraph, top_k)
+def create_kd_tree(words):
+    if not words or len(words) == 0:
+        return None
+
+    root = KdTreeNode(w2v_model[words[0]], words[0], 0)
+    for i in range(1, len(words)):
+        root.insert_into_kd_tree(KdTreeNode(w2v_model[words[i]], words[i]))
+    return root
+
+
+def get_trace(kd_tree_root, point):
+    trace = []
+    cur = kd_tree_root
+    while cur:
+        trace.append(cur)
+        if point[cur.dim] > cur.sample[cur.dim]:
+            cur = cur.right
+        else:
+            cur = cur.left
+    return trace
+
+
+def get_k_near(kd_tree_root, point, k, contain_the_point=False):
+    k_near_neg = []
+    trace = get_trace(kd_tree_root, point)
+
+    while len(trace) > 0:
+        parent = trace.pop()
+        if np.array_equal(point, parent.sample) and not contain_the_point:
+            continue
+
+        dis_with_parent = -get_points_distance(parent.sample, point)
+        if len(k_near_neg) < k:
+            heapq.heappush(k_near_neg, (dis_with_parent, parent))
+        elif dis_with_parent > k_near_neg[0][0]:
+            k_near_neg[0] = (dis_with_parent, parent)
+            heapq.heapify(k_near_neg)
+        else:
+            continue
+
+        dis_with_plane = abs(parent.sample[parent.dim] - point[parent.dim])
+        if dis_with_plane < -k_near_neg[0][0]:
+            if point[parent.dim] > parent.sample[parent.dim]:
+                parent = parent.left
+            else:
+                parent = parent.right
+            trace += get_trace(parent, point)
+
+    k_near = []
+    while k_near_neg:
+        pair = heapq.heappop(k_near_neg)
+        k_near.append((-pair[0], pair[1]))
+    return k_near[::-1]
+
+
+def get_dis_near(kd_tree_root, point, dis):
+    dis_near_heap = []
+    trace = get_trace(kd_tree_root, point)
+
+    while len(trace) > 0:
+        parent = trace.pop()
+        if np.array_equal(point, parent.sample):
+            continue
+
+        dis_with_parent = get_points_distance(parent.sample, point)
+        if dis_with_parent <= dis:
+            dis_near_heap.append((dis_with_parent, parent))
+        else:
+            continue
+
+        dis_with_plane = abs(parent.sample[parent.dim] - point[parent.dim])
+        if dis_with_plane < dis:
+            if point[parent.dim] > parent.sample[parent.dim]:
+                parent = parent.left
+            else:
+                parent = parent.right
+            trace += get_trace(parent, point)
+
+    return sorted(dis_near_heap)
+
+
+def extract_key_words(paragraph, top_k, allow_pos=None):
+    key_words = word_seg.extract_key_words(paragraph, top_k, allow_pos)
     res = []
     for word in key_words:
-        _wid = DAO.get_one("word", word=word)
-        if _wid is None or str(_wid["id"]) not in w2v_model:
+        word = word.encode('utf-8')
+        if word not in w2v_model:
             continue
-        res.append(str(_wid["id"]))
+        res.append(word)
     return res
-
-def predict_proba(i_word, o_word):
-    i_word_vec = w2v_model[i_word]
-    o_word = w2v_model.wv.vocab[o_word]
-    o_word_l = w2v_model.syn1[o_word.point].T
-    dot = np.dot(i_word_vec, o_word_l)
-    l_prob = -sum(np.logaddexp(0, -dot) + o_word.code*dot)
-    return l_prob
-
-
-def get_key_words_from(paragraph):
-    word_weight = {}
-
-    w_cnt = 0
-    for w_pos in posseg.cut(paragraph):
-        w = w_pos.word
-        if w in stop_words:
-            continue
-
-        wid = DAO.get_one('word', word=w)
-        if wid is None or str(wid["id"]) not in w2v_model:
-            continue
-
-        w_cnt += 1
-
-        wid = str(wid["id"])
-        p_w = 0
-        cache = {}
-        for existed_wid in word_weight:
-            _e_w = "_".join([existed_wid, wid])
-            _w_e = "_".join([wid, existed_wid])
-
-            if _e_w in cache:
-                p_ew = cache[_e_w]
-            else:
-                p_ew = cache[_e_w] = predict_proba(existed_wid, wid)
-
-            if _w_e in cache:
-                p_we = cache[_w_e]
-            else:
-                p_we = cache[_w_e] = predict_proba(wid, existed_wid)
-
-            word_weight[existed_wid] += p_ew
-            p_w += p_we
-
-        if w_pos.flag not in expected_pos:
-            continue
-
-        if wid in word_weight:
-            word_weight[wid] = p_w * 2
-        else:
-            word_weight[wid] = p_w
-
-    word_weight_pairs = Counter(word_weight).most_common(max(5, int(w_cnt*0.5)))
-    return [pair[0] for pair in word_weight_pairs]
 
 
 def get_points_distance(vec1, vec2):
@@ -103,57 +131,37 @@ def get_near(key_words, eps, i):
     return near
 
 
-def get_optimal_eps(key_words, min_pts):
-    distances = []
+def get_optimal_eps(key_words, kd_tree, min_pts):
     near = {}
     e = []
-    for i in range(len(key_words)):
-        vec_i = w2v_model[key_words[i]]
-        d_i = sorted(
-            [(get_points_distance(vec_i, w2v_model[key_words[j]]), j) for j in range(len(key_words)) if j != i])
-        distances.append(d_i)
-        e.append(d_i[min_pts-1][0])
-        near[i] = [d_i[x][1] for x in range(min_pts)]
+
+    for word in key_words:
+        k_near = get_k_near(kd_tree, w2v_model[word], min_pts)
+        e.append(k_near[min_pts - 1][0])
 
     e = sorted(e)
-    eps = e[int(0.2 * len(key_words))]
+    eps = e[int(0.1 * len(key_words))]
 
-    for i in near:
-        d_i = distances[i]
-        if d_i[min_pts-1][0] < eps:
-            x = min_pts
-            while x < len(d_i):
-                if d_i[x][0] > eps:
-                    break
-                near[i].append(d_i[x][1])
-                x += 1
-        else:
-            x = min_pts - 1
-            while x >= 0:
-                if d_i[x][0] <= eps:
-                    break
-                near[i].remove(d_i[x][1])
-                x -= 1
+    for i in range(len(key_words)):
+        near[key_words[i]] = [node[1].word for node in get_dis_near(kd_tree, w2v_model[key_words[i]], eps)]
 
     return near
 
 
-def db_scan(key_words):
+def db_scan(kd_tree, key_words, min_pts=4):
     if key_words is None or len(key_words) == 0:
         return {}
 
     k = 0
-    min_pts = 5
 
-    near = get_optimal_eps(key_words, min_pts)
+    near = get_optimal_eps(key_words, kd_tree, min_pts)
 
     m = {}
     _m = {}
-    unvisited_points = range(len(key_words))
 
-    while len(unvisited_points) > 0:
-        i = random.choice(unvisited_points)
-        unvisited_points.remove(i)
+    while key_words:
+        i = random.choice(key_words)
+        key_words.remove(i)
 
         if i in m:
             continue
@@ -168,23 +176,21 @@ def db_scan(key_words):
         k += 1
         m[i] = k
         _m.setdefault(k, [])
-        _m[k].append(key_words[i])
+        _m[k].append(i)
 
-        while len(t) > 0:
+        while t:
             j = random.choice(t)
             t.remove(j)
 
-            if j in m and m[j] > 0:
-                continue
+            if j not in m:
+                if len(near[j]) >= min_pts:
+                    for j_n in near[j]:
+                        if j_n not in t:
+                            t.append(j_n)
 
-            m[j] = k
-            _m.setdefault(k, [])
-            _m[k].append(key_words[j])
-
-            if len(near[j]) >= min_pts:
-                for j_n in near[j]:
-                    if j_n not in t:
-                        t.append(j_n)
+            if j not in m or m[j] == 0:
+                m[j] = k
+                _m[k].append(j)
 
     return _m
 
@@ -198,7 +204,15 @@ def mearge_list(list1, list2):
             list1.append(item)
 
 
+def get_time_interval(string):
+    global start_time
+    _time = time.time()
+    print "%s: %f sec." % (string, _time - start_time)
+    start_time = _time
+
+
 def main(dim, threshold=5):
+    global start_time
     dim_key_name = "%s-id" % dim
 
     THREAD_LOCAL.train_cnt = 0
@@ -220,11 +234,35 @@ def main(dim, threshold=5):
                 continue
 
             whole_review = '\n'.join([review_item["comment"] for review_item in review_cursor])
+            get_time_interval("Get whole reviews for %s" % item["id"])
+
             top_k = max(20, 2*review_cursor.count())
-            key_words = extract_key_words(whole_review, top_k)
+            key_words = extract_key_words(whole_review, top_k, expected_pos)
+            get_time_interval("Get top %d key words" % top_k)
             # mearge_list(key_words, textrank(whole_review, top_k))
 
-            clu1 = db_scan(key_words)
+            if len(key_words) > WORDVEC_SIZE:
+                kd_tree = create_kd_tree(key_words)
+                get_time_interval("Create kd tree")
+
+                cluster = db_scan(kd_tree, key_words)
+                get_time_interval("DBSCAN")
+
+                for c in cluster:
+                    if len(cluster[c]) == 0:
+                        continue
+
+                    if len(cluster[c]) > 1:
+                        center_coor = sum([w2v_model[word] for word in cluster[c]]) / len(cluster[c])
+                        center_word = get_k_near(kd_tree, center_coor, 1, True)[0][1].word
+                    else:
+                        center_word = cluster[c][0]
+
+                    key_words.append(center_word)
+                print " ".join(key_words)
+                get_time_interval("Update key word list")
+
+
 
 
             '''
@@ -240,5 +278,55 @@ def main(dim, threshold=5):
         print "%s: %s" % (threading.currentThread().getName(), e)
 
 
+class KdTreeNode:
+    def __init__(self, sample, word, dim=-1):
+        self.sample = sample
+        self.word = word
+        self.dim = dim
+        self.left = None
+        self.right = None
+
+    def __repr__(self):
+        return "{0}_{1}".format(self.dim, self.word)
+
+    def compare(self, other_sample):
+        if other_sample is None:
+            raise ValueError("Can't compare a node with None.")
+        if len(other_sample) != len(self.sample):
+            raise ValueError("Wrong format for other_sample.")
+
+        if other_sample[self.dim] > self.sample[self.dim]:
+            return 1
+        else:
+            return -1
+
+    def points_distance(self, other_node):
+        if not isinstance(other_node, KdTreeNode):
+            raise ValueError("Input type error.")
+
+        return get_points_distance(self.sample, other_node.sample)
+
+    def point_plane_distance(self, other_node):
+        if not isinstance(other_node, KdTreeNode):
+            raise ValueError("Input type error.")
+
+        return abs(other_node.sample[other_node.dim] - self.sample[other_node.dim])
+
+    def insert_into_kd_tree(self, node):
+        if node.sample[self.dim] > self.sample[self.dim]:
+            if not self.right:
+                node.dim = (self.dim + 1) % WORDVEC_SIZE
+                self.right = node
+            else:
+                self.right.insert_into_kd_tree(node)
+        else:
+            if not self.left:
+                node.dim = (self.dim + 1) % WORDVEC_SIZE
+                self.left = node
+            else:
+                self.left.insert_into_kd_tree(node)
+
+
 if __name__ == '__main__':
+    start_time = time.time()
     main('shop')
