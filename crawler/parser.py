@@ -208,7 +208,7 @@ class ReviewParser(ParserFactory):
             for _ in score_list:
                 key_val = self.search_by_regex(key_val_pattern, _.text.strip())
                 if key_val[0] not in key_pos and key_val[0] == u'人均':
-                    review["pay"] = int(key_val[1][0:key_val[1].index(u"元")])
+                    review["pay"] = int(self.search_by_regex(r'(\d+)', key_val[1])[0])
                 else:
                     score[key_pos[key_val[0]]] = des_value[key_val[1]]
             review["score"] = score
@@ -285,7 +285,7 @@ class ShopReviewsParser(ParserFactory):
                 for _ in score_list:
                     key_val = self.search_by_regex(key_val_pattern, _.text.strip())
                     if key_val[0] not in key_pos and key_val[0] == u'人均':
-                        review["pay"] = int(key_val[1][0:key_val[1].index(u"元")])
+                        review["pay"] = int(self.search_by_regex(r'(\d+)', key_val[1])[0])
                     else:
                         score[key_pos[key_val[0]]] = des_value[key_val[1]]
                 review["score"] = score

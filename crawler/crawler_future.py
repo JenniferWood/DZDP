@@ -171,7 +171,9 @@ class CrawlerClass:
             self._dao.move_to_last(COLL_UNFINISHED, url=url)
             print "[%s] %s: %s" % (threading.currentThread().getName(), url, ex)
         finally:
-            time.sleep(random.randint(self.thread_wait_lower, self.thread_wait_upper))
+            time_slot = random.randint(self.thread_wait_lower, self.thread_wait_upper)
+            print "[%s][%d]" % (threading.currentThread().getName(), time_slot)
+            time.sleep(time_slot)
 
     def pick_ip_randomly(self):
         x = random.randint(0, sum(self._ip_weights)-1)
