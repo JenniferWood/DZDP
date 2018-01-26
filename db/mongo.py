@@ -38,11 +38,11 @@ class MyMongoDb:
     def get_one(self, collection_name, **kv):
         return self._db[collection_name].find_one(kv)
 
-    def get_iter(self, collection_name, is_limited, limit_num, **kv):
+    def get_iter(self, collection_name, limit_num, **kv):
         res = self.get_all(collection_name, **kv)
         count = 0
         for item in res:
-            if is_limited and count >= limit_num:
+            if limit_num and count >= limit_num:
                 break
             yield item["url"]
 

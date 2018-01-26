@@ -19,6 +19,7 @@ class UrlData:
         self.collection = ''
         self.id = ''
         self.ref = ref
+        self.suffix = None
 
         if len(kv) > 0:
             self.__dict__.update(kv)
@@ -28,10 +29,13 @@ class UrlData:
                 self.type = type_info["urltype"]
                 self.id = type_info["id_"]
 
-                suffix = type_info["suffix"]
-                suffixes = suffix.split('?')
+                suff = type_info["suffix"]
+                suffixes = suff.split('?')
                 supp = suffixes[0]
                 self.collection = COLLECTION_MAP.get(self.type+"_"+supp, "")
+
+                if len(suffixes) > 1:
+                    self.suffix = suffixes[1]
 
                 if self.type == "member" and (len(suffixes) < 2 or suffixes[1] == ''):
                     if self.collection == "review":

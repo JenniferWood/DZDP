@@ -134,7 +134,7 @@ class CrawlerClass:
         page = UrlData(url)
 
         if self._dao.exists(COLL_URL_LIST, url=url):
-            # print "[Already Crawled] %s" % url
+            print "[Already Crawled] %s" % url
             self._dao.remove(COLL_UNFINISHED, url=url)
             CrawlerClass.success_num += 1
             return
@@ -152,7 +152,7 @@ class CrawlerClass:
                 self._dao.insert_with_update(page.collection, data)
                 if page.collection in ["wishlist", "review"]:
                     for coll in ["member", "shop"]:
-                        self._dao.update(coll, {"id": data["%s-id" % coll]}, {"item2vec": False})
+                        self._dao.update(coll, {"id": data["%s-id" % coll]}, {"item2vec": False}, upsert=False)
 
             # Next Links
             for link in links:
@@ -215,11 +215,12 @@ class CrawlerClass:
         self._dao.insert(COLL_URL_LIST, url=page.url, ref=page.ref)
         self._dao.remove(COLL_UNFINISHED, url=page.url)
 
-    def setup(self, max_crawling_num, is_limited=False):
+    def main(self, url_list):
+        print "We got %d urls to crawl." % len(url_list)
         start_time = time.time()
-        if is_limited:
-            print "Start to crawl at most %d pages." % max_crawling_num
-
         with futures.ThreadPoolExecutor(self.max_worker_num) as pool:
-            pool.map(self.crawl, self._dao.get_iter(COLL_UNFINISHED, is_limited, max_crawling_num))
+            pool.map(self.crawl, url_list)
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)
+
+    def setup(self, max_crawling_num=None):
+        self.main(self._dao.get_iter(COLL_UNFINISHED, max_crawling_num))

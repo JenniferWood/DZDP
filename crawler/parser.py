@@ -11,6 +11,9 @@ SHOP = "shop"
 MEMBER = "member"
 WISH_LIST = "wishlist"
 
+key_map = {u"口味": "flavor", u"环境": "env", u"服务": "service"}
+des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
+
 
 class ParserFactory:
     def __init__(self, url_data, soup):
@@ -42,7 +45,7 @@ class ParserFactory:
             time = "2017-%s" % time
         return time
 
-    def expand_by_page(self, max_page, page_format, _type, _col, _id):
+    def expand_by_page_randomly(self, max_page, page_format, _type, _col, _id):
         prob = random.uniform(0.5, 1)
         page_limit = int(math.ceil(max_page * prob))
         
@@ -57,6 +60,15 @@ class ParserFactory:
             self._next_links.append(UrlData(pg_url, ref, type=_type, collection=_col, id=_id))
 
             last_pg = pg
+
+    def expand_by_page(self, max_page, page_format, _type, _col, _id):
+        for pg in range(2, max_page+1):
+            pg_url = page_format % pg
+            pg_url = urljoin(self._url_data.url, pg_url)
+            ref = page_format % (pg-1)
+            ref = urljoin(self._url_data.url, ref)
+
+            self._next_links.append(UrlData(pg_url, ref, type=_type, collection=_col, id=_id))
 
     def parse(self):
         return []
@@ -123,9 +135,13 @@ class ShopParser(ParserFactory):
     def update_links(self):
         if self.skip:
             return
-        self._next_links.append(
-            UrlData(self._url_data.url+"/review_all", self._url_data.url,
-                    type=SHOP, collection=REVIEW, id=self._url_data.id))
+
+        for review_type in ["good", "middle", "bad"]:
+            review_suffix = "queryType=reviewGrade&queryVal=%s" % review_type
+            self._next_links.append(
+                UrlData("%s/review_all?%s" % (self._url_data.url, review_suffix),
+                        self._url_data.url,
+                        type=SHOP, collection=REVIEW, id=self._url_data.id, suffix=review_suffix))
 
         links = self.soup.find_all(attrs={"itemprop": "url"})
         for link in links:
@@ -146,9 +162,9 @@ class MemberParser(ParserFactory):
         elif self.soup.find(class_="man"):
             member["gender"] = 1
 
-        user_tags = []
-        for em in self.soup.select("#J_usertag em"):
-            user_tags.append(em.text.strip())
+        user_tags = [em.text.strip() for em in self.soup.select("#J_usertag em")]
+        if user_tags:
+            member["tags"] = user_tags
 
         user_time = self.soup.select(".user-time p")
         member["contri-value"] = int(user_time[0].select("#J_col_exp")[0].text.strip())
@@ -190,7 +206,7 @@ class ReviewParser(ParserFactory):
         review_content_block = self.soup.find(class_="review-content")
         
         # member id
-        reviewer_info = review_content_block.find(class_=".dper-photo-aside")
+        reviewer_info = review_content_block.find(class_="dper-photo-aside")
         review["member-id"] = reviewer_info["data-user-id"]
 
         # Review rank
@@ -202,16 +218,12 @@ class ReviewParser(ParserFactory):
         score_list = review_rank.select(".score .item")
         key_val_pattern = u'(.+)\s*：\s*(.+)'
         if len(score_list) > 0:
-            score = [-1.0] * 3
-            key_pos = {u"口味": 0, u"环境": 1, u"服务": 2}
-            des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
             for _ in score_list:
                 key_val = self.search_by_regex(key_val_pattern, _.text.strip())
-                if key_val[0] not in key_pos and key_val[0] == u'人均':
+                if key_val[0] not in key_map and key_val[0] == u'人均':
                     review["pay"] = int(self.search_by_regex(r'(\d+)', key_val[1])[0])
                 else:
-                    score[key_pos[key_val[0]]] = des_value[key_val[1]]
-            review["score"] = score
+                    review[key_map[key_val[0]]] = des_value[key_val[1]]
 
         # Review words
         review["comment"] = review_content_block.find(class_="review-words").get_text(' ', 'br/')
@@ -279,16 +291,12 @@ class ShopReviewsParser(ParserFactory):
             score_list = review_rank.select(".score .item")
             key_val_pattern = u'(.+)\s*：\s*(.+)'
             if len(score_list) > 0:
-                score = [-1.0] * 3
-                key_pos = {u"口味": 0, u"环境": 1, u"服务": 2}
-                des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
                 for _ in score_list:
                     key_val = self.search_by_regex(key_val_pattern, _.text.strip())
-                    if key_val[0] not in key_pos and key_val[0] == u'人均':
+                    if key_val[0] not in key_map and key_val[0] == u'人均':
                         review["pay"] = int(self.search_by_regex(r'(\d+)', key_val[1])[0])
                     else:
-                        score[key_pos[key_val[0]]] = des_value[key_val[1]]
-                review["score"] = score
+                        review[key_map[key_val[0]]] = des_value[key_val[1]]
 
             # Review words
             review["comment"] = comment_block.find(class_="review-words").get_text(' ', 'br/')
@@ -318,10 +326,13 @@ class ShopReviewsParser(ParserFactory):
     def update_links(self):
         if self._url_data.url.find('pageno') != -1:
             return
-        page_numbers = self.soup.select(".Pages a")
-        if len(page_numbers) > 2:
+        page_numbers = self.soup.select(".reviews-pages a")
+        if page_numbers:
             max_page = int(page_numbers[-2].text)
-            self.expand_by_page(max_page, "?pageno=%d", SHOP, REVIEW, self._url_data.id)
+            pg_format = "?pageno=%d"
+            if self._url_data.suffix:
+                pg_format += "&%s" % self._url_data.suffix
+            self.expand_by_page_randomly(max_page, pg_format, SHOP, REVIEW, self._url_data.id)
 
 
 class MemberReviewsParser(ParserFactory):
@@ -359,9 +370,8 @@ class MemberReviewsParser(ParserFactory):
                 review["pay"] = int(pay)
             review["comment"] = comment_block.find(class_="mode-tc comm-entry").text.strip()
 
-            review["create-time"] = self.search_by_regex(
-                r'(\d+)',
-                comment_block.find(class_="mode-tc info").span.text.strip())[0]
+            create_time = comment_block.find(class_="mode-tc info").span.text.strip()
+            review["create-time"] = self.supplement_time_format(create_time[3:])
             res.append(review)
 
         return res
