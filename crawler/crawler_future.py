@@ -55,7 +55,7 @@ class CrawlerClass:
     crawl_num = 0
     success_num = 0
 
-    def __init__(self, db_name):
+    def __init__(self, db_name, conf_file=None):
         self._dao = mongo.MyMongoDb(db_name)
         self._ip_list = ["127.0.0.1"]
         self._ip_weights = [5]
@@ -67,6 +67,21 @@ class CrawlerClass:
         self.thread_wait_upper = 300
         self.thread_wait_lower = 60
         self.max_worker_num = 5
+
+        if conf_file:
+            self.__dict__.update(self.load_param(conf_file))
+
+    @staticmethod
+    def load_param(conf_file):
+        print "Loading param..."
+        p = {}
+        with open(conf_file, 'r') as f_open:
+            for line in f_open:
+                line = line.strip()
+                k_v = line.split(' ')
+                p[k_v[0]] = int(k_v[1])
+                print line
+        return p
 
     def whether_to_skip(self, page_collection):
         if page_collection not in self.skip:
@@ -216,7 +231,9 @@ class CrawlerClass:
         self._dao.remove(COLL_UNFINISHED, url=page.url)
 
     def main(self, url_list):
-        print "We got %d urls to crawl." % len(url_list)
+        if isinstance(url_list, list):
+            print "We got %d urls to crawl." % len(url_list)
+
         start_time = time.time()
         with futures.ThreadPoolExecutor(self.max_worker_num) as pool:
             pool.map(self.crawl, url_list)

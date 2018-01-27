@@ -11,6 +11,8 @@ SHOP = "shop"
 MEMBER = "member"
 WISH_LIST = "wishlist"
 
+THIS_YEAR = 2018
+
 key_map = {u"口味": "flavor", u"环境": "env", u"服务": "service"}
 des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
 
@@ -42,7 +44,7 @@ class ParserFactory:
             if time.index('-') == 2:
                 time = "20%s" % time
         else:
-            time = "2017-%s" % time
+            time = "%d-%s" % (THIS_YEAR, time)
         return time
 
     def expand_by_page_randomly(self, max_page, page_format, _type, _col, _id):
@@ -216,7 +218,7 @@ class ReviewParser(ParserFactory):
             review["star"] = float(star_block['class'][1][-2:]) / 10
 
         score_list = review_rank.select(".score .item")
-        key_val_pattern = u'(.+)\s*：\s*(.+)'
+        key_val_pattern = u'(.+)\s*[：:]\s*(.+)'
         if len(score_list) > 0:
             for _ in score_list:
                 key_val = self.search_by_regex(key_val_pattern, _.text.strip())
