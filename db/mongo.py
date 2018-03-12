@@ -19,6 +19,9 @@ class MyMongoDb:
     def insert(self, collection_name, **kv):
         self._db[collection_name].insert(kv)
 
+    def insert_many(self, collection_name, documents):
+        self._db[collection_name].insert_many(documents)
+
     def remove(self, collection_name, **kv):
         self._db[collection_name].remove(kv)
 
@@ -31,6 +34,13 @@ class MyMongoDb:
 
     def get_all(self, collection_name, **kv):
         return self._db[collection_name].find(kv)
+
+    def get_and_limit(self, collection_name, limit, **kv):
+        _all_cursor = self.get_all(collection_name, **kv)
+        if not limit:
+            return _all_cursor
+        assert isinstance(limit, int), "Mongo limit must be integer."
+        return _all_cursor[0:limit]
 
     def get_and_sort(self, collection_name, sort_key, sort_order=pymongo.DESCENDING, **kv):
         return self.get_all(collection_name, **kv).sort(sort_key, sort_order)
@@ -63,6 +73,9 @@ class MyMongoDb:
         for doc in documents:
             self.remove(collection_name, **doc)
             self.insert(collection_name, **doc)
+
+    def count_column_num(self, collection_name, field):
+        return self._db[collection_name].aggregate([{"$group": {"_id": "$%s"%field, "num": {"$sum": 1}}}])
 
     @staticmethod
     def get_key_query(collection_name, dic):

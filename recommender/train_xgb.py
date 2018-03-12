@@ -6,11 +6,12 @@ from sklearn import metrics
 from sklearn.model_selection import GridSearchCV, cross_val_score
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from db import MyMongoDb
-import time, datetime
+import time
+import datetime
 
 DAO = MyMongoDb("dzdp")
 no_need_columns = {
-    "review": ["_id", "id", "comment", "heart-num", "got", "recommend", "score"],
+    "review": ["_id", "id", "comment", "heart-num", "got", "recommend", "score", "create-time", "update-time"],
     "shop": ["_id", "item2vec", "coordinate"],
     "member": ["_id", "item2vec", "tags"]}
 score_columns = ["flavor", "env", "service"]
@@ -67,8 +68,6 @@ def pre_process(review_data, shop_data, member_data):
             return np.nan
     now = datetime.datetime.now()
     data["register-date"] = pd.to_datetime(data["register-date"], format="%Y-%m-%d")
-    data["create-time"] = pd.to_datetime(data["create-time"], format="%Y-%m-%d")
-    data["update-time"] = pd.to_datetime(data["update-time"], format="%Y-%m-%d")
     data[score_columns] = data[score_columns].applymap(format_zero_float)
     data = data.assign(has_branch=data["shop-name"] != data["full-name"],
                        member_score=data[["star"] + score_columns].mean(axis=1),
@@ -100,6 +99,20 @@ def data_reader():
     return pre_process(*get_raw_data())
 
 
+def fix_neg_pos_ratio(data):
+    neg_num = data[data["label"] == 0].shape[0]
+    pos_num = data[data["label"] == 1].shape[0]
+
+    if pos_num > neg_num:
+        neg = data[data["label"] == 0]
+        times = pos_num / neg_num - 1
+        if times <= 0:
+            return data
+        frames = [data] + [neg]*times
+        real_data = pd.concat(frames, ignore_index=True)
+        return real_data
+
+
 def fit_model(alg, dtrain, predictors, target, use_train_cv=True, cv_folds=5, early_stop_round=50):
     if use_train_cv:
         xgb_param = alg.get_xgb_params()
@@ -108,7 +121,7 @@ def fit_model(alg, dtrain, predictors, target, use_train_cv=True, cv_folds=5, ea
                            early_stopping_rounds=early_stop_round, metrics="auc", verbose_eval=2)
         alg.set_params(n_estimators=cv_result.shape[0])
 
-    alg.fit(dtrain[predictors], dtrain[target], verbose=2)
+    alg.fit(dtrain[predictors], dtrain[target], verbose=True)
     prediction = alg.predict(dtrain[predictors])
     print prediction
 
@@ -123,11 +136,11 @@ def train(data):
                          subsample=0.8,
                          colsample_bytree=0.8,
                          random_state=27)
-    fit_model(xgb1, data, predictors, target, False)
+    fit_model(xgb1, data, predictors, target, True)
 
 
 if __name__ == "__main__":
     start_time = time.time()
     data = data_reader()
     print "Read and pre-processed data : %0.2f seconds." % (time.time() - start_time)
-    train(data)
+    train(fix_neg_pos_ratio(data))

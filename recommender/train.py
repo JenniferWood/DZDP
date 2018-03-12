@@ -1,5 +1,7 @@
 import paddle.v2 as paddle
 import os
+import time
+import random
 import shutil
 import numpy as np
 import datetime
@@ -16,6 +18,68 @@ PARAM_TAR = '../models/dnn/parameters.tar'
 with_gpu = os.getenv('WITH_GPU', '0') != '0'
 paddle.init(use_gpu=with_gpu)
 distinct_shop = DAO.get_all("review").distinct("shop-id")
+fm_size = len(distinct_shop)
+
+
+def transfer_timestamp(time_str):
+    time_format = "%Y-%m-%d"
+    if len(time_str) > 10:
+        time_format = "%Y-%m-%d %H:%M"
+    timestamp = time.mktime(time.strptime(time_str, time_format))
+    return timestamp
+
+
+class DataLoader:
+    def __init__(self):
+        pass
+
+    def _train_reader(self, is_infer):
+        def reader():
+            today = datetime.datetime.now()
+            with DAO.get_all("review") as cursor:
+                member_met_shops = {}
+                for item in cursor:
+                    member_id, shop_id = item["member-id"].encode('utf-8'), item["shop-id"].encode('utf-8')
+
+                    if member_id not in model_member or shop_id not in model_shop\
+                            or "star" not in item\
+                            or len(item["create-time"]) < 10:
+                        continue
+
+                    score = item["star"]
+
+                    shop_info = DAO.get_one("shop", id=shop_id)
+                    user_info = DAO.get_one("member", id=member_id)
+
+                    create_timestamp = transfer_timestamp(item["create-time"])
+
+                    if member_id not in member_met_shops:
+                        reviewed_shops = []
+                        for review in DAO.get_all("review", **{"member-id": member_id}):
+                            reviewed_shops.append((transfer_timestamp(review["create-time"]),
+                                                   distinct_shop.index(review["shop-id"])))
+                        reviewed_shops.sort(key=lambda x: x[0])
+
+                        wished_shops = []
+                        for wish in DAO.get_all("wishlist", **{"member-id": member_id}):
+                            wished_shops.append((transfer_timestamp(wish["time"]),
+                                                 distinct_shop.index(wish["shop-id"])))
+                        wished_shops.sort(key=lambda x: x[0])
+
+                        member_met_shops[member_id] = {
+                            "reviewed": reviewed_shops,
+                            "wished": wished_shops
+                        }
+
+                    review_updated = int("update-time" in item)
+        return reader
+
+    def train(self):
+        return self._train_reader(False)
+
+    def infer(self):
+        return self._train_reader(True)
+
 
 
 def copy_needed_model_files():
@@ -59,24 +123,52 @@ def dnn_network():
     return hidden2
 
 
-def factorization_machine():
+def fm_layer(input, factor_size):
+    first_order = paddle.layer.fc(
+        input=input, size=1, act=paddle.activation.Linear())
+
+    second_order = paddle.layer.factorization_machine(
+        input=input,
+        factor_size=factor_size,
+        act=paddle.activation.Linear())
+
+    out = paddle.layer.addto(
+        input=[first_order, second_order],
+        act=paddle.activation.Linear(),
+        bias_attr=False)
+
+    return out
+
+
+def recommender():
     u_s_emb = dnn_network()
 
     reviewed_sparse = paddle.layer.data(
-        name='reviewd_shops',
-        type=paddle.data_type.sparse_float_vector(len(distinct_shop))
+        name='reviewed_shops',
+        type=paddle.data_type.sparse_binary_vector(len(distinct_shop))
     )
 
     review_days = paddle.layer.data(
         name='review_days',
-        type=paddle.data_type.integer_value()
+        type=paddle.data_type.integer_value(6)
     )
 
-    fm = paddle.layer.factorization_machine(
-        input=[u_s_emb, reviewed_sparse, review_days],
-        factor_size=257+len(distinct_shop))
+    updated = paddle.layer.data(
+        name='updated',
+        type=paddle.data_type.integer_value(2)
+    )
 
-    return fm
+    fm = fm_layer(
+        input=reviewed_sparse,
+        factor_size=fm_size)
+
+    predict = paddle.layer.fc(
+        input=[u_s_emb, fm, review_days, updated],
+        size=1,
+        act=paddle.activation.Sigmoid()
+    )
+
+    return predict
 
 
 def train():
@@ -86,14 +178,12 @@ def train():
     model_member = word2vec.Word2Vec.load("%s/model_member" % MODEL_DIR_TARGET)
     model_shop = word2vec.Word2Vec.load("%s/model_shop" % MODEL_DIR_TARGET)
 
-    inference = factorization_machine()
+    inference = recommender()
 
-    cost = paddle.layer.huber_regression_cost(
+    cost = paddle.layer.square_error_cost(
         input=inference,
         label=paddle.layer.data(
-            name='score', type=paddle.data_type.dense_vector(1)),
-        delta=0.25,
-        coeff=2.0)
+            name='score', type=paddle.data_type.dense_vector(1)))
 
     parameters = paddle.parameters.create(cost)
 
@@ -107,9 +197,10 @@ def train():
     feeding = {
         'user_id': 0,
         'shop_id': 1,
-        'reviewed_shops':2,
-        'review_days':3,
-        'score': 4
+        'reviewed_shops': 2,
+        'review_days': 3,
+        'updated': 4,
+        'score': 5
     }
 
     def event_handler(event):
@@ -118,53 +209,10 @@ def train():
                 print "Pass %d, Batch %d, Cost %.2f" % (
                     event.pass_id, event.batch_id, event.cost)
 
-    def train_reader():
-        def reader():
-            today = datetime.datetime.now()
-            with DAO.get_all("review") as cursor:
-                member_shop_indexes = {}
-
-                for item in cursor:
-                    member_id, shop_id = item["member-id"].encode('utf-8'), item["shop-id"].encode('utf-8')
-
-                    if member_id not in model_member or shop_id not in model_shop:
-                        continue
-
-                    if "star" not in item:
-                        continue
-                    score = item["star"]
-
-                    if member_id not in member_shop_indexes:
-                        member_shops_cursor = DAO.get_all("review", **{"member-id": member_id})
-                        member_shops_num = member_shops_cursor.count()
-                        member_shops = np.array([0.0] * len(distinct_shop))
-                        for shop in member_shops_cursor:
-                            member_shops[distinct_shop.index(shop["shop-id"])] = 1.0
-
-                        if member_shops_num > 0:
-                            member_shops /= member_shops_num
-                        member_shop_indexes[member_id] = member_shops
-
-                    # todo: add sparse feature actors
-                    review_date_str = item["create-time"]
-                    if "update-time" in item:
-                        review_date_str = item["update-time"]
-                    review_date = datetime.datetime.strptime(review_date_str, "%Y-%m-%d")
-                    review_days = int((review_date - today).days) + 1
-
-                    yield model_member[member_id],\
-                        model_shop[shop_id],\
-                        member_shop_indexes[member_id],\
-                        review_days, \
-                        np.array([score])
-
-        return reader
-
     trainer.train(
-        reader=paddle.batch(paddle.reader.shuffle(train_reader(), 1024), batch_size=100),
+        reader=paddle.batch(paddle.reader.shuffle(DataLoader().train(), 1024), batch_size=100),
         event_handler=event_handler,
-        feeding=feeding,
-        num_passes=1)
+        feeding=feeding)
 
     print "Training done..."
     with open('../models/dnn/parameters.tar', 'w') as f:

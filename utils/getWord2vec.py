@@ -84,7 +84,8 @@ if __name__ == '__main__':
             sent_num = get_raw_data()
             print "\nGet Sentences : %d" % sent_num
 
-            if sent_num == 0: break
+            if sent_num == 0:
+                break
             time.sleep(120)
     except KeyboardInterrupt:
         print "See You Tomorrow...O(∩_∩)O~~"

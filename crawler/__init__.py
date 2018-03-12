@@ -1,7 +1,7 @@
 from crawler_future import CrawlerClass
 
 MAX_CRAWLING_NUM = 500
-CONF_FILE = '../conf/param_crawler_1.conf'
+CONF_FILE = '../conf/param_crawler.conf'
 
 
 def setup(db_name, is_limited=False):
