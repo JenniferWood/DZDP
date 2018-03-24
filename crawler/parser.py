@@ -3,6 +3,7 @@
 import re
 import random
 import math
+import datetime
 from urldata import UrlData
 from urlparse import urljoin
 
@@ -40,12 +41,25 @@ class ParserFactory:
 
     @staticmethod
     def supplement_time_format(time):
-        if time.count('-') == 2:
-            if time.index('-') == 2:
-                time = "20%s" % time
+        time = time.strip()
+        time_split = time.strip().split(' ')
+
+        date_split = map(int, time_split[0].split('-'))
+        day, month = date_split[-1], date_split[-2]
+        if len(date_split) == 3:
+            year = date_split[0] if date_split[0] >= 2000 else date_split[0]+2000
         else:
-            time = "%d-%s" % (THIS_YEAR, time)
-        return time
+            year = THIS_YEAR
+
+        hour, minute, second = 0, 0, 0
+        if len(time_split) > 1:
+            clock_split = map(int, time_split[1].split(':'))
+            hour = clock_split[0]
+            minute = clock_split[1]
+            if len(clock_split) > 2:
+                second = clock_split[3]
+
+        return datetime.datetime(year, month, day, hour, minute, second)
 
     def expand_by_page_randomly(self, max_page, page_format, _type, _col, _id):
         prob = random.uniform(0.5, 1)

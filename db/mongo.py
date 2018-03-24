@@ -45,6 +45,18 @@ class MyMongoDb:
     def get_and_sort(self, collection_name, sort_key, sort_order=pymongo.DESCENDING, **kv):
         return self.get_all(collection_name, **kv).sort(sort_key, sort_order)
 
+    def get_max_or_min(self, collection_name, key, get_max, **query):
+        if key not in query:
+            query[key] = {"$exists": True}
+        elif type(query[key]) is dict:
+            query[key]["$exists"] = True
+        else:
+            return self.get_one(collection_name, **query)
+
+        return self.get_and_sort(collection_name, key,
+                                 sort_order=pymongo.DESCENDING if get_max else pymongo.ASCENDING,
+                                 **query)[0]
+
     def get_one(self, collection_name, **kv):
         return self._db[collection_name].find_one(kv)
 

@@ -136,7 +136,7 @@ class CrawlerClass:
 
                 raise
 
-    def crawl(self, url):
+    def crawl(self, url, ignore_exists):
         if not url.startswith('http://'):
             self._dao.update("unfinished", {"url": url}, {"url": "http://"+url}, False)
             url = "http://"+url
@@ -148,7 +148,7 @@ class CrawlerClass:
 
         page = UrlData(url)
 
-        if self._dao.exists(COLL_URL_LIST, url=url):
+        if not ignore_exists and self._dao.exists(COLL_URL_LIST, url=url):
             print "[Already Crawled] %s" % url
             self._dao.remove(COLL_UNFINISHED, url=url)
             CrawlerClass.success_num += 1
@@ -163,11 +163,14 @@ class CrawlerClass:
             crawled_data, links = self.crawl_page(page)
 
             # Insert
-            for data in crawled_data:
-                self._dao.insert_with_update(page.collection, data)
-                if page.collection in ["wishlist", "review"]:
-                    for coll in ["member", "shop"]:
-                        self._dao.update(coll, {"id": data["%s-id" % coll]}, {"item2vec": False}, upsert=False)
+            with open('./newly_review_ids', 'a') as fopen:
+                for data in crawled_data:
+                    self._dao.insert_with_update(page.collection, data)
+                    if page.collection == "review":
+                        fopen.write("%s\n" % data["id"])
+                    if page.collection in ["wishlist", "review"]:
+                        for coll in ["member", "shop"]:
+                            self._dao.update(coll, {"id": data["%s-id" % coll]}, {"item2vec": False}, upsert=False)
 
             # Next Links
             for link in links:
@@ -230,13 +233,16 @@ class CrawlerClass:
         self._dao.insert(COLL_URL_LIST, url=page.url, ref=page.ref)
         self._dao.remove(COLL_UNFINISHED, url=page.url)
 
-    def main(self, url_list):
+    def main(self, url_list, ignore_exists=False):
         if isinstance(url_list, list):
             print "We got %d urls to crawl." % len(url_list)
 
         start_time = time.time()
         with futures.ThreadPoolExecutor(self.max_worker_num) as pool:
-            pool.map(self.crawl, url_list)
+            for url in url_list:
+                pool.submit(self.crawl, url, ignore_exists)
+
+            # pool.map(self.crawl, url_list)
         print "Process finished, time consuming %f seconds." % (time.time()-start_time)
 
     def setup(self, max_crawling_num=None):

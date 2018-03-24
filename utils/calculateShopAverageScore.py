@@ -30,12 +30,12 @@ def update_avr(shop_id):
 
     score_matrix = []
     for r in shop_review_cur:
-        if "score" not in r:
+        if "score" not in r or not r["score"]:
             score = [0.0, 0.0, 0.0]
         else:
             score = r["score"]
-        score.append(r["star"] if "star" in r else np.nan)
-        score.append(r["pay"] if "pay" in r else np.nan)
+        score.append(r["star"] if "star" in r else 0.0)
+        score.append(r["pay"] if "pay" in r else 0.0)
         score_matrix.append(score)
     score_data = pd.DataFrame(score_matrix)
     score_data[score_data == 0.0] = np.nan
@@ -76,4 +76,14 @@ def do_work(limit=None):
 
 
 if __name__ == "__main__":
-    do_work()
+    updated_shops = set()
+    with open("./newly_review_ids", "r") as fopen:
+        i = 1
+        for line in fopen:
+            review_id = line.strip()
+            shop_id = DAO.get_one("review", id=review_id)["shop-id"]
+            print i
+            i += 1
+            if shop_id not in updated_shops:
+                update_avr(shop_id)
+                updated_shops.add(shop_id)
