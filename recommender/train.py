@@ -18,11 +18,14 @@ PARAM_TAR = '../models/dnn/parameters.tar'
 
 with_gpu = os.getenv('WITH_GPU', '0') != '0'
 paddle.init(use_gpu=with_gpu)
-distinct_shop = DAO.get_all("review").distinct("shop-id")
-fm_size = len(distinct_shop)
 
+DISTINCT_SHOP = DAO.get_all("review").distinct("shop-id")
 CATEGORY_NUM = 36
 DISTRICT_NUM = 18
+CATEGORICAL_FEATURE_DIMS = [2, 36, 18, 2, 3]
+FM_SIZE = len(DISTINCT_SHOP) + sum(CATEGORICAL_FEATURE_DIMS)
+EMB_SIZE = 64
+
 
 def transfer_timestamp(origin_time):
     time_type = type(origin_time)
@@ -130,33 +133,8 @@ class DataLoader:
                         if not shop_info or not user_info:
                             continue
 
+                        # continuous features
                         create_timestamp = transfer_timestamp(item["create-time"])
-
-                        if member_id not in member_met_shops:
-                            reviewed_shops = []
-                            for review in DAO.get_all("review", **{"member-id": member_id, "create-time": {"$type": 9}}):
-                                reviewed_shops.append((transfer_timestamp(review["create-time"]),
-                                                       distinct_shop.index(review["shop-id"])))
-                            # reviewed_shops.sort(key=lambda x: x[0])
-
-                            # wished_shops = []
-                            for wish in DAO.get_all("wishlist", **{"member-id": member_id}):
-                                if wish["shop-id"] not in distinct_shop:
-                                    continue
-                                reviewed_shops.append((transfer_timestamp(wish["time"]) if "time" in wish else 0.0,
-                                                     distinct_shop.index(wish["shop-id"])))
-                            reviewed_shops.sort(key=lambda x: x[0])
-
-                            member_met_shops[member_id] = reviewed_shops
-                            # {
-                               # "reviewed": reviewed_shops,
-                                # "wished": wished_shops
-                            # }
-
-                        reviewed_before = binary_search(member_met_shops[member_id], create_timestamp)
-                        # wished_before = binary_search(member_met_shops[member_id]["wished"], create_timestamp)
-                        review_updated = int("update-time" in item)
-
                         continuous = [create_timestamp, DAO.get_one("branch", name=shop_info["name"])["num"],
                                       shop_info["coordinate"][0], shop_info["coordinate"][1]]
                         for feature in self.shop_conti_features:
@@ -166,15 +144,49 @@ class DataLoader:
                         continuous.append(transfer_timestamp(user_info["register-date"]))
                         self._deal_continuous_data(continuous)
 
-                        categorical = [[review_updated],
-                                       [DAO.get_one("category", name=shop_info["category"])["_id"]],
-                                       [DAO.get_one("district", name=shop_info["district"])["_id"]],
-                                       [int(user_info["is-vip"])],
-                                       [user_info["gender"]]]
+                        # categorical features
+                        review_updated = int("update-time" in item)  # dim 2
+                        shop_category = DAO.get_one("category", name=shop_info["category"])["_id"]  # dim CATEGORY_NUM
+                        shop_district = DAO.get_one("district", name=shop_info["district"])["_id"]  # dim DISTRICT_NUM
+                        user_vip = int(user_info["is-vip"])  # dim 2
+                        user_gender = user_info["gender"]  # dim 3
 
-                        features = [model_shop[shop_id], model_member[member_id],
-                                    shop_info["name"], user_info["name"], reviewed_before,
-                                    continuous] + categorical
+                        categorical = [review_updated,
+                                       shop_category,
+                                       shop_district,
+                                       user_vip,
+                                       user_gender]
+
+                        # sparse input
+                        if member_id not in member_met_shops:
+                            reviewed_shops = []
+                            for review in DAO.get_all("review", **{"member-id": member_id, "create-time": {"$type": 9}}):
+                                reviewed_shops.append((transfer_timestamp(review["create-time"]),
+                                                       DISTINCT_SHOP.index(review["shop-id"])))
+                            # reviewed_shops.sort(key=lambda x: x[0])
+
+                            # wished_shops = []
+                            for wish in DAO.get_all("wishlist", **{"member-id": member_id}):
+                                if wish["shop-id"] not in DISTINCT_SHOP:
+                                    continue
+                                reviewed_shops.append((transfer_timestamp(wish["time"]) if "time" in wish else 0.0,
+                                                     DISTINCT_SHOP.index(wish["shop-id"])))
+                            reviewed_shops.sort(key=lambda x: x[0])
+
+                            member_met_shops[member_id] = reviewed_shops
+                            # {
+                               # "reviewed": reviewed_shops,
+                                # "wished": wished_shops
+                            # }
+
+                        sparse_vector = binary_search(member_met_shops[member_id], create_timestamp)
+                        # wished_before = binary_search(member_met_shops[member_id]["wished"], create_timestamp)
+                        for i in range(5):
+                            sparse_vector.append(len(DISTINCT_SHOP)+sum(CATEGORICAL_FEATURE_DIMS[:i])+categorical[i])
+
+                        features = [shop_info["name"], user_info["name"],  # name
+                                    model_shop[shop_id], model_member[member_id], continuous,
+                                    sparse_vector] + categorical
 
                         if not is_infer:
                             features += [[score]]
@@ -225,29 +237,49 @@ def dnn_part():
         name='review_updated',
         type=paddle.data_type.integer_value(2)
     )
+    up_emb = paddle.layer.embedding(
+        input=updated,
+        size=EMB_SIZE
+    )
 
     category = paddle.layer.data(
         name='shop_category',
         type=paddle.data_type.integer_value(CATEGORY_NUM)
+    )
+    cat_emb = paddle.layer.embedding(
+        input=category,
+        size=EMB_SIZE
     )
 
     district = paddle.layer.data(
         name='shop_district',
         type=paddle.data_type.integer_value(DISTRICT_NUM)
     )
+    dis_emb = paddle.layer.embedding(
+        input=district,
+        size=EMB_SIZE
+    )
 
     vip = paddle.layer.data(
         name='user_vip',
         type=paddle.data_type.integer_value(2)
+    )
+    vip_emb = paddle.layer.embedding(
+        input=vip,
+        size=EMB_SIZE
     )
 
     gender = paddle.layer.data(
         name='user_gender',
         type=paddle.data_type.integer_value(3)
     )
+    gen_emb = paddle.layer.embedding(
+        input=gender,
+        size=EMB_SIZE
+    )
 
     hidden0 = paddle.layer.fc(
-        input=[uid, sid, continuous, updated, category, district, gender],
+        input=[uid, sid, continuous, up_emb, cat_emb, dis_emb, vip_emb, gen_emb],
         size=RELU_NUM[0],
         act=paddle.activation.Relu())
 
@@ -285,33 +317,27 @@ def recommender():
     dnn = dnn_part()
 
     reviewed_sparse = paddle.layer.data(
-        name='reviewed_shops',
-        type=paddle.data_type.sparse_binary_vector(len(distinct_shop))
+        name='sparse_input',
+        type=paddle.data_type.sparse_binary_vector(FM_SIZE)
     )
 
-    wished_sparse = paddle.layer.data(
-        name='wished_shops',
-        type=paddle.data_type.sparse_binary_vector(len(distinct_shop))
-    )
-
-    fm1 = fm_layer(
+    fm = fm_layer(
         input=reviewed_sparse,
-        factor_size=fm_size)
-
-    '''
-    fm2 = fm_layer(
-        input=wished_sparse,
-        factor_size=fm_size
-    )
-    '''
+        factor_size=FM_SIZE)
 
     predict = paddle.layer.fc(
-        input=[dnn, fm1],
+        input=[dnn, fm],
         size=1,
         act=paddle.activation.Sigmoid()
     )
 
     return predict
+
+
+def event_handler(event):
+    if isinstance(event, paddle.event.EndIteration):
+        print "\nPass %d, Batch %d, Cost %.2f" % (
+            event.pass_id, event.batch_id, event.cost)
 
 
 def train():
@@ -337,16 +363,17 @@ def train():
     trainer = paddle.trainer.SGD(
         cost=cost,
         parameters=parameters,
-        update_equation=optimizer)
+        update_equation=optimizer
+    )
 
     feeding = {
-        'shop_id': 0,
-        'user_id': 1,
-        'shop_name': 2,
-        'user_name': 3,
-        'reviewed_shops': 4,
+        'shop_name': 0,
+        'user_name': 1,
+        'shop_id': 2,
+        'user_id': 3,
+        'continuous': 4,
+        'sparse_input': 5,
         # 'wished_shops':5,
-        'continuous': 5,
         'review_updated': 6,
         'shop_category': 7,
         'shop_district': 8,
@@ -355,18 +382,14 @@ def train():
         'score': 11
     }
 
-    def event_handler(event):
-        if isinstance(event, paddle.event.EndIteration):
-            if event.batch_id % 100 == 0:
-                print "Pass %d, Batch %d, Cost %.2f" % (
-                    event.pass_id, event.batch_id, event.cost)
-
     obj = DataLoader()
 
     trainer.train(
         reader=paddle.batch(paddle.reader.shuffle(obj.train(), 1024), batch_size=100),
         event_handler=event_handler,
-        feeding=feeding)
+        feeding=feeding,
+        num_passes=10
+    )
 
     print "Training done..."
     with open('../models/dnn/parameters.tar', 'w') as f:

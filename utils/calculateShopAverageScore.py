@@ -44,7 +44,7 @@ def update_avr(shop_id):
     for i in range(0, len(NEW_COLUMNS)):
         update[NEW_COLUMNS[i]] = mean[i]
 
-    DAO.update("shop", {"id": shop_id}, update, multi=False)
+    DAO.update("shop", {"id": shop_id}, update, upsert=False, multi=False)
 
     print "shop id %s" % shop_id
     print update
