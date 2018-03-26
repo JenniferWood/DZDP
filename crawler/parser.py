@@ -3,6 +3,7 @@
 import re
 import random
 import math
+import time
 import datetime
 from urldata import UrlData
 from urlparse import urljoin
@@ -16,6 +17,14 @@ THIS_YEAR = 2018
 
 key_map = {u"口味": "flavor", u"环境": "env", u"服务": "service"}
 des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
+
+
+def search_by_regex(pattern, text):
+    pattern = re.compile(pattern)
+    res = re.search(pattern, text)
+    if res is None:
+        return None
+    return res.groups()
 
 
 class ParserFactory:
@@ -32,17 +41,42 @@ class ParserFactory:
         return self._next_links
 
     @staticmethod
-    def search_by_regex(pattern, text):
-        pattern = re.compile(pattern)
-        res = re.search(pattern, text)
-        if res is None:
-            return None
-        return res.groups()
+    def supplement_str_time(origin_time):
+        # XX分钟前
+        res = search_by_regex("(\d*)分钟前", origin_time)
+        if res:
+            real_time = datetime.datetime.now() - datetime.timedelta(minutes=int(res[0]))
+            return real_time
+
+        # XX小时前
+        res = search_by_regex("(\d*)小时前", origin_time)
+        if res:
+            real_time = datetime.datetime.now() - datetime.timedelta(hours=int(res[0]))
+            return real_time
+
+        # 昨天XX:XX
+        res = search_by_regex("昨天(\d*):(\d*)", origin_time)
+        if res:
+            yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
+            real_time = datetime.datetime(yesterday.year, yesterday.month, yesterday.day,
+                                          int(res[0]), int(res[1]), yesterday.second)
+            return real_time
+
+        # 前天XX:XX
+        res = search_by_regex("前天(\d*):(\d*)", origin_time)
+        if res:
+            ago = datetime.datetime.now() - datetime.timedelta(days=2)
+            real_time = datetime.datetime(ago.year, ago.month, ago.day,
+                                          int(res[0]), int(res[1]), ago.second)
+            return real_time
+
+        return ParserFactory.supplement_time_format(origin_time)
+
 
     @staticmethod
-    def supplement_time_format(time):
-        time = time.strip()
-        time_split = time.strip().split(' ')
+    def supplement_time_format(origin_time):
+        origin_time = origin_time.strip()
+        time_split = origin_time.strip().split(' ')
 
         date_split = map(int, time_split[0].split('-'))
         day, month = date_split[-1], date_split[-2]
@@ -134,15 +168,15 @@ class ShopParser(ParserFactory):
             "category": categories[1].text.strip(),
             "district": categories[2].text.strip(),
             "full-name": breadcrumb.span.text.strip(),
-            "name": self.search_by_regex(r'shopName:\s*"(.*)",', self.soup.text)[0],
+            "name": search_by_regex(r'shopName:\s*"(.*)",', self.soup.text)[0],
         }
 
         script_pattern = r'%s:\s*"([^"]*)",'
         shop.update({
-            "name": self.search_by_regex(script_pattern % "shopName", self.soup.text)[0],
+            "name": search_by_regex(script_pattern % "shopName", self.soup.text)[0],
             "coordinate": [
-                float(self.search_by_regex(script_pattern % "shopGlat", self.soup.text)[0]),
-                float(self.search_by_regex(script_pattern % "shopGlng", self.soup.text)[0])
+                float(search_by_regex(script_pattern % "shopGlat", self.soup.text)[0]),
+                float(search_by_regex(script_pattern % "shopGlng", self.soup.text)[0])
             ]
         })
 
@@ -185,7 +219,7 @@ class MemberParser(ParserFactory):
         user_time = self.soup.select(".user-time p")
         member["contri-value"] = int(user_time[0].select("#J_col_exp")[0].text.strip())
 
-        register_date_res = self.search_by_regex(r'(\d{4}-\d{2}-\d{2})', user_time[2].text)
+        register_date_res = search_by_regex(r'(\d{4}-\d{2}-\d{2})', user_time[2].text)
         member["register-date"] = register_date_res[0]
 
         return [member]
@@ -216,7 +250,7 @@ class ReviewParser(ParserFactory):
 
         # shop id
         shop_info = nav_w[-1]
-        shop_id_res = self.search_by_regex(id_pattern, shop_info['href'])
+        shop_id_res = search_by_regex(id_pattern, shop_info['href'])
         review["shop-id"] = shop_id_res[0]
 
         review_content_block = self.soup.find(class_="review-content")
@@ -235,9 +269,9 @@ class ReviewParser(ParserFactory):
         key_val_pattern = u'(.+)\s*[：:]\s*(.+)'
         if len(score_list) > 0:
             for _ in score_list:
-                key_val = self.search_by_regex(key_val_pattern, _.text.strip())
+                key_val = search_by_regex(key_val_pattern, _.text.strip())
                 if key_val[0] not in key_map and key_val[0] == u'人均':
-                    review["pay"] = int(self.search_by_regex(r'(\d+)', key_val[1])[0])
+                    review["pay"] = int(search_by_regex(r'(\d+)', key_val[1])[0])
                 else:
                     review[key_map[key_val[0]]] = des_value[key_val[1]]
 
@@ -308,9 +342,9 @@ class ShopReviewsParser(ParserFactory):
             key_val_pattern = u'(.+)\s*：\s*(.+)'
             if len(score_list) > 0:
                 for _ in score_list:
-                    key_val = self.search_by_regex(key_val_pattern, _.text.strip())
+                    key_val = search_by_regex(key_val_pattern, _.text.strip())
                     if key_val[0] not in key_map and key_val[0] == u'人均':
-                        review["pay"] = int(self.search_by_regex(r'(\d+)', key_val[1])[0])
+                        review["pay"] = int(search_by_regex(r'(\d+)', key_val[1])[0])
                     else:
                         review[key_map[key_val[0]]] = des_value[key_val[1]]
 
@@ -382,7 +416,7 @@ class MemberReviewsParser(ParserFactory):
             review["star"] = float(star_str)/10.0
 
             if len(score_spans) > 1:
-                pay = self.search_by_regex(r'(\d+)', score_spans[1].text.strip())[0]
+                pay = search_by_regex(r'(\d+)', score_spans[1].text.strip())[0]
                 review["pay"] = int(pay)
             review["comment"] = comment_block.find(class_="mode-tc comm-entry").text.strip()
 
@@ -420,7 +454,7 @@ class MemberWishlistParser(ParserFactory):
             }
 
             favor_time = favorShop.find(class_="time").text.strip()
-            favor["time"] = self.supplement_time_format(favor_time)
+            favor["time"] = self.supplement_str_time(favor_time)
 
             shop_url = "http://www.dianping.com/shop/%s" % favor["shop-id"]
             self._next_links.append(
