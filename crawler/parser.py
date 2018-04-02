@@ -3,7 +3,6 @@
 import re
 import random
 import math
-import time
 import datetime
 from urldata import UrlData
 from urlparse import urljoin
@@ -16,7 +15,10 @@ WISH_LIST = "wishlist"
 THIS_YEAR = 2018
 
 key_map = {u"口味": "flavor", u"环境": "env", u"服务": "service"}
+pay_titles = {u"费用", u"人均"}
 des_value = {u"非常好": 5.0, u"很好": 4.0, u"好": 3.0, u"一般": 2.0, u"差": 1.0, u"很差": 1.0}
+
+title_beijing = {u"北京美食", u"门头沟美食", u"怀柔区美食", u"密云区美食",u"平谷区美食", u"门头沟区美食",u"延庆区美食"}
 
 
 def search_by_regex(pattern, text):
@@ -157,7 +159,9 @@ class ShopParser(ParserFactory):
 
         breadcrumb = self.soup.find(class_="breadcrumb")
         categories = breadcrumb('a')
-        if categories[0].text.strip() != u'北京美食':
+        region = categories[0].text.strip()
+        print "Shop %s region %s." % (self._url_data.id, region)
+        if categories[0].text.strip() not in title_beijing:
             self.skip = True
             print "Shop %s is not in Beijing. -> %s" % (self._url_data.id, self._url_data.url)
             return []
@@ -241,7 +245,9 @@ class ReviewParser(ParserFactory):
         review = {"id": self._url_data.id}
 
         nav_w = self.soup.select(".detail-crumb a")
-        if nav_w[0].text.strip() != u'北京美食':
+        region = nav_w[0].text.strip()
+        print "Shop %s region %s." % (self._url_data.id, region)
+        if nav_w[0].text.strip() not in title_beijing:
             self.skip = True
             print "Review %s is not for shop in Beijing. -> %s" % (self._url_data.id, self._url_data.url)
             return []
@@ -263,14 +269,14 @@ class ReviewParser(ParserFactory):
         review_rank = review_content_block.find(class_="review-rank")
         star_block = review_rank.find(class_="star")
         if star_block is not None:
-            review["star"] = float(star_block['class'][1][-2:]) / 10
+            review["star"] = float(star_block['class'][1][7:]) / 10  # sml_strXX
 
         score_list = review_rank.select(".score .item")
         key_val_pattern = u'(.+)\s*[：:]\s*(.+)'
         if len(score_list) > 0:
             for _ in score_list:
                 key_val = search_by_regex(key_val_pattern, _.text.strip())
-                if key_val[0] not in key_map and key_val[0] == u'人均':
+                if key_val[0] not in key_map and key_val[0] in pay_titles:
                     review["pay"] = int(search_by_regex(r'(\d+)', key_val[1])[0])
                 else:
                     review[key_map[key_val[0]]] = des_value[key_val[1]]
@@ -312,7 +318,9 @@ class ShopReviewsParser(ParserFactory):
             return []
 
         nav_w = self.soup.select(".list-crumb a")
-        if nav_w[0].text.strip() != u'北京美食':
+        region = nav_w[0].text.strip()
+        print "Shop %s region %s." % (self._url_data.id, region)
+        if nav_w[0].text.strip() not in title_beijing:
             self.skip = True
             print "Review %s is not for shop in Beijing. -> %s" % (self._url_data.id, self._url_data.url)
             return []
@@ -336,14 +344,14 @@ class ShopReviewsParser(ParserFactory):
             review_rank = comment_block.find(class_="review-rank")
             star_block = review_rank.find(class_="star")
             if star_block is not None:
-                review["star"] = float(star_block['class'][1][-2:]) / 10
+                review["star"] = float(star_block['class'][1][7:]) / 10  # sml_strXX
 
             score_list = review_rank.select(".score .item")
             key_val_pattern = u'(.+)\s*：\s*(.+)'
             if len(score_list) > 0:
                 for _ in score_list:
                     key_val = search_by_regex(key_val_pattern, _.text.strip())
-                    if key_val[0] not in key_map and key_val[0] == u'人均':
+                    if key_val[0] not in key_map and key_val[0] in pay_titles:
                         review["pay"] = int(search_by_regex(r'(\d+)', key_val[1])[0])
                     else:
                         review[key_map[key_val[0]]] = des_value[key_val[1]]
