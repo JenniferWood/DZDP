@@ -203,24 +203,25 @@ class CrawlerClass:
             i += 1
         return i, str(ip)
 
-    def update_ip_list(self):
-        ip_url = 'http://www.xicidaili.com/nn/'
-        req = urllib2.Request(url=ip_url, headers=random.choice(HEADER_LIST))
-        res = urllib2.urlopen(req, timeout=20)
-        soup = BeautifulSoup(res.read(), 'lxml')
-        ips = soup.find_all('tr')
+    def update_proxy_list(self, pages=1):
+        for p in range(pages):
+            ip_url = 'http://www.xicidaili.com/nn/%d' % (p+1)
+            req = urllib2.Request(url=ip_url, headers=random.choice(HEADER_LIST))
+            res = urllib2.urlopen(req, timeout=20)
+            soup = BeautifulSoup(res.read(), 'lxml')
+            ips = soup.find_all('tr')
 
-        for i in range(1, len(ips)):
-            ip_info = ips[i]
-            tds = ip_info.find_all('td')
-            res = "%s://%s:%s" % (tds[5].text.lower(), tds[1].text, tds[2].text)
-            self._ip_list.append(res)
-            if ip_info.find(class_="bar_inner slow") is not None or ip_info.find(class_="bar_inner medium") is not None:
-                self._ip_weights.append(1)
-            else:
-                self._ip_weights.append(4)
+            for i in range(1, len(ips)):
+                ip_info = ips[i]
+                tds = ip_info.find_all('td')
+                res = "%s://%s:%s" % (tds[5].text.lower(), tds[1].text, tds[2].text)
+                self._ip_list.append(res)
+                if ip_info.find(class_="bar_inner slow") or ip_info.find(class_="bar_inner medium"):
+                    self._ip_weights.append(1)
+                else:
+                    self._ip_weights.append(5)
 
-        print "Get proxy ip Done! total %d." % len(self._ip_list)
+        print "Get proxy ip Done! Totally %d." % len(self._ip_list)
 
     def set_skip_collections(self, **cp):
         for collection, prob in cp.iteritems():

@@ -42,7 +42,7 @@ def complete_review_create_time():
     url_list += [page_fm % item["id"] for item in DAO.get_all("review", **{"create-time": re.compile("^1.*")})]
 
     obj = CrawlerClass("dzdp", "../conf/param_process.conf")
-    obj.update_ip_list()
+    obj.update_proxy_list(pages=5)
     obj.main(url_list, True)
 
 
