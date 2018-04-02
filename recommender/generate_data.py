@@ -1,8 +1,9 @@
+import os
+import shutil
 import math
 import time
 import random
 import datetime
-from train import DataLoader
 from db import mongo
 from gensim.models import word2vec
 
@@ -13,6 +14,22 @@ CATEGORICAL_FEATURE_DIMS = [2, 36, 18, 2, 3]
 
 DISTINCT_SHOP = DAO.get_all("review").distinct("shop-id")
 
+
+def copy_needed_model_files():
+    with open('../models/NEW_MODEL', 'w+') as flag_file:
+        flag = flag_file.read().strip().split()
+        if len(flag) < 2 or flag[0] != "embedding" or flag[1] != "1":
+            flag_file.write("embedding 0")
+            print "Already updated model files."
+            return
+
+    print "Copying item2vec model files..."
+    if os.path.exists(MODEL_DIR_TARGET):
+        shutil.rmtree(MODEL_DIR_TARGET)
+    shutil.copytree(MODEL_DIR_SRC, MODEL_DIR_TARGET)
+
+
+copy_needed_model_files()
 model_member = word2vec.Word2Vec.load("%s/model_member" % MODEL_DIR_TARGET)
 model_shop = word2vec.Word2Vec.load("%s/model_shop" % MODEL_DIR_TARGET)
 
@@ -189,8 +206,6 @@ class DataGenerator:
                         feature_str = "%s,%s,%s,%s,%s,%s,%s,%f" % \
                                       (shop_info["name"].encode('utf-8'), user_info["name"].encode('utf-8'),shop_emb, user_emb, conti_str, sparse_vec_str, categorical_str, score)
 
-                        # if not is_infer:
-                            # features += [[score]]
                         yield feature_str
 
                     except Exception, e:
@@ -206,7 +221,7 @@ class DataGenerator:
         return self._train_reader(True)
 
 
-obj = DataLoader()
+obj = DataGenerator()
 reader = obj.train()
 
 with open('train_data.csv','w') as f:
