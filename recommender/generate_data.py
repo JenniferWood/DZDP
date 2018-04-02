@@ -1,37 +1,20 @@
-import paddle.v2 as paddle
-import os
+import math
 import time
 import random
-import shutil
 import datetime
-import math
-from paddle.v2.plot import Ploter
+from train import DataLoader
 from db import mongo
 from gensim.models import word2vec
 
-DAO = mongo.MyMongoDb("dzdp")
-EMB_FEATURE_DIM = 256
-RELU_NUM = [512, 256, 128]
 MODEL_DIR_SRC = '../models/embedding'
 MODEL_DIR_TARGET = '../models/dnn/embedding'
-PARAM_TAR = '../models/dnn/parameters.tar'
+DAO = mongo.MyMongoDb("dzdp")
+CATEGORICAL_FEATURE_DIMS = [2, 36, 18, 2, 3]
 
-with_gpu = os.getenv('WITH_GPU', '0') != '0'
-paddle.init(use_gpu=with_gpu)
+DISTINCT_SHOP = DAO.get_all("review").distinct("shop-id")
 
 model_member = word2vec.Word2Vec.load("%s/model_member" % MODEL_DIR_TARGET)
 model_shop = word2vec.Word2Vec.load("%s/model_shop" % MODEL_DIR_TARGET)
-
-DISTINCT_SHOP = DAO.get_all("review").distinct("shop-id")
-CATEGORY_NUM = 36
-DISTRICT_NUM = 18
-CATEGORICAL_FEATURE_DIMS = [2, 36, 18, 2, 3]
-FM_SIZE = len(DISTINCT_SHOP) + sum(CATEGORICAL_FEATURE_DIMS)
-EMB_SIZE = 64
-
-title_train = "Train"
-title_test = "Test"
-ploter = Ploter(title_train, title_test)
 
 
 def transfer_timestamp(origin_time):
@@ -51,6 +34,18 @@ def transfer_timestamp(origin_time):
     return timestamp
 
 
+def min_max_scale(value, min_val, max_val):
+    assert min_val < max_val
+    if not value or math.isnan(value):
+        return random.random()
+    if value >= max_val:
+        return 1.0
+    if value <= min_val:
+        return 0.0
+
+    return float(value - min_val) / (max_val - min_val)
+
+
 def binary_search(stamp_list, q):
     if not stamp_list:
         return []
@@ -66,19 +61,7 @@ def binary_search(stamp_list, q):
     return list(set(map(lambda x: x[1], stamp_list[0:s])))
 
 
-def min_max_scale(value, min_val, max_val):
-    assert min_val < max_val
-    if not value or math.isnan(value):
-        return random.random()
-    if value >= max_val:
-        return 1.0
-    if value <= min_val:
-        return 0.0
-
-    return float(value - min_val) / (max_val - min_val)
-
-
-class DataLoader:
+class DataGenerator:
     def __init__(self):
         self.shop_conti_features = ["avr-flavor", "avr-env", "avr-service", "avr-star", "avr-pay", "review-num"]
         self.threshold = {
@@ -223,237 +206,14 @@ class DataLoader:
         return self._train_reader(True)
 
 
-def copy_needed_model_files():
-    with open('../models/NEW_MODEL', 'w+') as flag_file:
-        flag = flag_file.read().strip().split()
-        if len(flag) < 2 or flag[0] != "embedding" or flag[1] != "1":
-            flag_file.write("embedding 0")
-            print "Already updated model files."
-            return
+obj = DataLoader()
+reader = obj.train()
 
-    print "Copying item2vec model files..."
-    if os.path.exists(MODEL_DIR_TARGET):
-        shutil.rmtree(MODEL_DIR_TARGET)
-    shutil.copytree(MODEL_DIR_SRC, MODEL_DIR_TARGET)
-
-
-def dnn_part():
-    uid = paddle.layer.data(
-        name='user_id',
-        type=paddle.data_type.dense_vector(EMB_FEATURE_DIM))
-
-    sid = paddle.layer.data(
-        name='shop_id',
-        type=paddle.data_type.dense_vector(EMB_FEATURE_DIM))
-
-    continuous = paddle.layer.data(
-        name='continuous',
-        type=paddle.data_type.dense_vector(12)
-    )
-
-    updated = paddle.layer.data(
-        name='review_updated',
-        type=paddle.data_type.integer_value(2)
-    )
-    up_emb = paddle.layer.embedding(
-        input=updated,
-        size=EMB_SIZE
-    )
-
-    category = paddle.layer.data(
-        name='shop_category',
-        type=paddle.data_type.integer_value(CATEGORY_NUM)
-    )
-    cat_emb = paddle.layer.embedding(
-        input=category,
-        size=EMB_SIZE
-    )
-
-    district = paddle.layer.data(
-        name='shop_district',
-        type=paddle.data_type.integer_value(DISTRICT_NUM)
-    )
-    dis_emb = paddle.layer.embedding(
-        input=district,
-        size=EMB_SIZE
-    )
-
-    vip = paddle.layer.data(
-        name='user_vip',
-        type=paddle.data_type.integer_value(2)
-    )
-    vip_emb = paddle.layer.embedding(
-        input=vip,
-        size=EMB_SIZE
-    )
-
-    gender = paddle.layer.data(
-        name='user_gender',
-        type=paddle.data_type.integer_value(3)
-    )
-    gen_emb = paddle.layer.embedding(
-        input=gender,
-        size=EMB_SIZE
-    )
-
-    hidden0 = paddle.layer.fc(
-        input=[uid, sid, continuous, up_emb, cat_emb, dis_emb, vip_emb, gen_emb],
-        size=RELU_NUM[0],
-        act=paddle.activation.Relu())
-
-    hidden1 = paddle.layer.fc(
-        input=hidden0,
-        size=RELU_NUM[1],
-        act=paddle.activation.Relu())
-
-    hidden2 = paddle.layer.fc(
-        input=hidden1,
-        size=RELU_NUM[2],
-        act=paddle.activation.Relu())
-
-    return hidden2
-
-
-def fm_layer(input, factor_size):
-    first_order = paddle.layer.fc(
-        input=input, size=1, act=paddle.activation.Linear())
-
-    second_order = paddle.layer.factorization_machine(
-        input=input,
-        factor_size=factor_size,
-        act=paddle.activation.Linear())
-
-    out = paddle.layer.addto(
-        input=[first_order, second_order],
-        act=paddle.activation.Linear(),
-        bias_attr=False)
-
-    return out
-
-
-def recommender():
-    dnn = dnn_part()
-
-    reviewed_sparse = paddle.layer.data(
-        name='sparse_input',
-        type=paddle.data_type.sparse_binary_vector(FM_SIZE)
-    )
-
-    fm = fm_layer(
-        input=reviewed_sparse,
-        factor_size=FM_SIZE)
-
-    predict = paddle.layer.fc(
-        input=[dnn, fm],
-        size=1,
-        act=paddle.activation.Sigmoid()
-    )
-
-    return predict
-
-
-def event_handler(event):
-    global parameters
-    if isinstance(event, paddle.event.EndIteration):
-        print "\n[%s] Pass %d, Batch %d, Cost %.2f" % (
-            datetime.datetime.now(), event.pass_id, event.batch_id, event.cost)
-        ploter.append(title_train, event.pass_id, event.cost)
-        ploter.plot('./train.png')
-
-        with open('../models/dnn/parameters.tar', 'w') as f:
-            parameters.to_tar(f)
-            print "Saving parameters done..."
-
-
-def train():
-    global parameters, inference
-
-    # copy_needed_model_files()
-    # model_member = word2vec.Word2Vec.load("%s/model_member" % MODEL_DIR_TARGET)
-    # model_shop = word2vec.Word2Vec.load("%s/model_shop" % MODEL_DIR_TARGET)
-
-    inference = recommender()
-
-    cost = paddle.layer.square_error_cost(
-        input=inference,
-        label=paddle.layer.data(
-            name='score', type=paddle.data_type.dense_vector(1)))
-
-    parameters = paddle.parameters.create(cost)
-
-    optimizer = paddle.optimizer.Adam(
-        learning_rate=5e-5,
-        regularization=paddle.optimizer.L2Regularization(rate=8e-4))
-
-    trainer = paddle.trainer.SGD(
-        cost=cost,
-        parameters=parameters,
-        update_equation=optimizer
-    )
-
-    feeding = {
-        'shop_name': 0,
-        'user_name': 1,
-        'shop_id': 2,
-        'user_id': 3,
-        'continuous': 4,
-        'sparse_input': 5,
-        # 'wished_shops':5,
-        'review_updated': 6,
-        'shop_category': 7,
-        'shop_district': 8,
-        'user_vip': 9,
-        'user_gender': 10,
-        'score': 11
-    }
-
-    obj = DataLoader()
-
-    trainer.train(
-        reader=paddle.batch(paddle.reader.shuffle(obj.train(), 1024), batch_size=1000),
-        event_handler=event_handler,
-        feeding=feeding
-    )
-
-    print "Training done..."
-
-
-def infer(member_id, shop_id):
-    global parameters, inference
-
-    if member_id not in model_member:
-        raise ValueError("member_id not in model_member")
-
-    if shop_id not in model_shop:
-        raise ValueError("shop_id not in model_shop")
-
-    if not parameters:
-        print "Loading saved parameters..."
-        with open(PARAM_TAR, 'r') as f:
-            parameters = paddle.parameters.Parameters.from_tar(f)
-
-    if not inference:
-        inference = paddle.layer.fc(input=dnn_part(), size=1, act=paddle.activation.Relu())
-
-    user = model_member[member_id]
-    shop = model_shop[shop_id]
-
-    infer_dict = {
-        'user_id': 0,
-        'shop_id': 1
-    }
-
-    prediction = paddle.infer(
-        output_layer=inference,
-        parameters=parameters,
-        input=[[user, shop]],
-        feeding=infer_dict)
-
-    print prediction
-
-
-parameters, inference = None, None
-
-
-if __name__ == '__main__':
-    train()
+with open('train_data.csv','w') as f:
+    i, c = 1, 1
+    for d in reader():
+        if i % 1000 == 0:
+            print c
+            c += 1
+        f.write("%s\n" % d)
+        i += 1
