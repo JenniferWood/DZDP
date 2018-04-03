@@ -192,23 +192,13 @@ class DataLoader:
                         for i in range(5):
                             sparse_vector.append(len(DISTINCT_SHOP)+sum(CATEGORICAL_FEATURE_DIMS[:i])+categorical[i])
 
-                        '''
                         features = [shop_info["name"], user_info["name"],  # name
                                     model_shop[shop_id], model_member[member_id], continuous,
                                     sparse_vector] + categorical
-                        '''
 
-                        shop_emb = ' '.join(map(str, model_shop[shop_id]))
-                        user_emb = ' '.join(map(str, model_member[member_id]))
-                        conti_str = ' '.join(map(str, continuous))
-                        sparse_vec_str = ' '.join(map(str, sparse_vector))
-                        categorical_str = ','.join(map(str,categorical))
-                        feature_str = "%s,%s,%s,%s,%s,%s,%s,%f" % \
-                                      (shop_info["name"].encode('utf-8'), user_info["name"].encode('utf-8'),shop_emb, user_emb, conti_str, sparse_vec_str, categorical_str, score)
-
-                        # if not is_infer:
-                            # features += [[score]]
-                        yield feature_str
+                        if not is_infer:
+                            features += [[score]]
+                        yield features
 
                     except Exception, e:
                         print e.message
@@ -237,7 +227,24 @@ def copy_needed_model_files():
     shutil.copytree(MODEL_DIR_SRC, MODEL_DIR_TARGET)
 
 
-def dnn_part():
+def fm_layer(input, factor_size):
+    first_order = paddle.layer.fc(
+        input=input, size=1, act=paddle.activation.Linear())
+
+    second_order = paddle.layer.factorization_machine(
+        input=input,
+        factor_size=factor_size,
+        act=paddle.activation.Linear())
+
+    out = paddle.layer.addto(
+        input=[first_order, second_order],
+        act=paddle.activation.Linear(),
+        bias_attr=False)
+
+    return out
+
+
+def recommender():
     uid = paddle.layer.data(
         name='user_id',
         type=paddle.data_type.dense_vector(EMB_FEATURE_DIM))
@@ -296,6 +303,14 @@ def dnn_part():
         size=EMB_SIZE
     )
 
+    dense_input = paddle.layer.concat(
+        input=[uid, sid, continuous]
+    )
+    fm_dense = fm_layer(
+        input=dense_input,
+        factor_size=524
+    )
+
     hidden0 = paddle.layer.fc(
         input=[uid, sid, continuous, up_emb, cat_emb, dis_emb, vip_emb, gen_emb],
         size=RELU_NUM[0],
@@ -311,58 +326,27 @@ def dnn_part():
         size=RELU_NUM[2],
         act=paddle.activation.Relu())
 
-    return hidden2
-
-
-def fm_layer(input, factor_size):
-    first_order = paddle.layer.fc(
-        input=input, size=1, act=paddle.activation.Linear())
-
-    second_order = paddle.layer.factorization_machine(
-        input=input,
-        factor_size=factor_size,
-        act=paddle.activation.Linear())
-
-    out = paddle.layer.addto(
-        input=[first_order, second_order],
-        act=paddle.activation.Linear(),
-        bias_attr=False)
-
-    return out
-
-
-def recommender():
-    dnn = dnn_part()
-
     reviewed_sparse = paddle.layer.data(
         name='sparse_input',
         type=paddle.data_type.sparse_binary_vector(FM_SIZE)
     )
 
+    '''
     fm = fm_layer(
         input=reviewed_sparse,
         factor_size=FM_SIZE)
+    '''
+
+    linear_sparse = paddle.layer.fc(
+        input=reviewed_sparse, size=1, act=paddle.activation.Linear())
 
     predict = paddle.layer.fc(
-        input=[dnn, fm],
+        input=[fm_dense, hidden2, linear_sparse],
         size=1,
-        act=paddle.activation.Sigmoid()
+        act=paddle.activation.Linear()
     )
 
     return predict
-
-
-def event_handler(event):
-    global parameters
-    if isinstance(event, paddle.event.EndIteration):
-        print "\n[%s] Pass %d, Batch %d, Cost %.2f" % (
-            datetime.datetime.now(), event.pass_id, event.batch_id, event.cost)
-        ploter.append(title_train, event.pass_id, event.cost)
-        ploter.plot('./train.png')
-
-        with open('../models/dnn/parameters.tar', 'w') as f:
-            parameters.to_tar(f)
-            print "Saving parameters done..."
 
 
 def train():
@@ -409,47 +393,22 @@ def train():
 
     obj = DataLoader()
 
+    def event_handler(event):
+        if isinstance(event, paddle.event.EndIteration):
+            print "\n[%s] Pass %d, Batch %d, Cost %.2f" % (
+                datetime.datetime.now(), event.pass_id, event.batch_id, event.cost)
+            ploter.append(title_train, event.batch_id, event.cost)
+            ploter.plot('./train.png')
+
+            with open(PARAM_TAR, 'w') as f:
+                parameters.to_tar(f)
+                print "Saving parameters done"
+
     trainer.train(
         reader=paddle.batch(paddle.reader.shuffle(obj.train(), 1024), batch_size=1000),
         event_handler=event_handler,
         feeding=feeding
     )
-
-    print "Training done..."
-
-
-def infer(member_id, shop_id):
-    global parameters, inference
-
-    if member_id not in model_member:
-        raise ValueError("member_id not in model_member")
-
-    if shop_id not in model_shop:
-        raise ValueError("shop_id not in model_shop")
-
-    if not parameters:
-        print "Loading saved parameters..."
-        with open(PARAM_TAR, 'r') as f:
-            parameters = paddle.parameters.Parameters.from_tar(f)
-
-    if not inference:
-        inference = paddle.layer.fc(input=dnn_part(), size=1, act=paddle.activation.Relu())
-
-    user = model_member[member_id]
-    shop = model_shop[shop_id]
-
-    infer_dict = {
-        'user_id': 0,
-        'shop_id': 1
-    }
-
-    prediction = paddle.infer(
-        output_layer=inference,
-        parameters=parameters,
-        input=[[user, shop]],
-        feeding=infer_dict)
-
-    print prediction
 
 
 parameters, inference = None, None
