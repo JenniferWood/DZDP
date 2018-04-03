@@ -11,8 +11,13 @@ MODEL_DIR_SRC = '../models/embedding'
 MODEL_DIR_TARGET = '../models/dnn/embedding'
 DAO = mongo.MyMongoDb("dzdp")
 CATEGORICAL_FEATURE_DIMS = [2, 36, 18, 2, 3]
+SHOP_NUM = 5000
 
-DISTINCT_SHOP = DAO.get_all("review").distinct("shop-id")
+ALL_REVIEW = DAO.get_all("review", **{"star":{"$lt": 3.0},"create-time":{"$type":9}})
+DISTINCT_SHOP = ALL_REVIEW.distinct("shop-id")
+
+member_met_shops = {}
+shops = DISTINCT_SHOP
 
 
 def copy_needed_model_files():
@@ -168,6 +173,7 @@ class DataGenerator:
                         # sparse input
                         if member_id not in member_met_shops:
                             reviewed_shops = []
+
                             for review in DAO.get_all("review", **{"member-id": member_id, "create-time": {"$type": 9}}):
                                 reviewed_shops.append((transfer_timestamp(review["create-time"]),
                                                        DISTINCT_SHOP.index(review["shop-id"])))
@@ -212,7 +218,96 @@ class DataGenerator:
                         print e.message
                         continue
 
-        return reader
+        def make_data(shop_info, shop_review):
+            if not shop_review:
+                return None
+
+            user = shop_review["member-id"]
+            if user not in model_member:
+                return None
+
+            user_info = DAO.get_one("member", id=user)
+            if not user_info:
+                return None
+
+            # continuous features
+            create_timestamp = transfer_timestamp(shop_review["create-time"])
+            continuous = [create_timestamp, DAO.get_one("branch", name=shop_info["name"])["num"],
+                          shop_info["coordinate"][0], shop_info["coordinate"][1]]
+
+            for feature in self.shop_conti_features:
+                continuous.append(shop_info[feature])
+
+            continuous.append(user_info["contri-value"])
+            continuous.append(transfer_timestamp(user_info["register-date"]))
+            self._deal_continuous_data(continuous)
+
+            # categorical features
+            review_updated = int("update-time" in shop_review)  # dim 2
+            shop_category = DAO.get_one("category", name=shop_info["category"])["_id"]  # dim CATEGORY_NUM
+            shop_district = DAO.get_one("district", name=shop_info["district"])["_id"]  # dim DISTRICT_NUM
+            user_vip = int(user_info["is-vip"])  # dim 2
+            user_gender = user_info["gender"]  # dim 3
+
+            categorical = [review_updated,
+                           shop_category,
+                           shop_district,
+                           user_vip,
+                           user_gender]
+
+            # sparse input
+            if user not in member_met_shops:
+                reviewed_shops = []
+
+                for user_review in DAO.get_all("review", **{"member-id": user, "create-time": {"$type": 9}}):
+                    if user_review["shop-id"] not in shops:
+                        continue
+                    reviewed_shops.append((transfer_timestamp(user_review["create-time"]),
+                                           shops.index(user_review["shop-id"])))
+
+                reviewed_shops.sort(key=lambda x: x[0])
+
+                member_met_shops[user] = reviewed_shops
+
+            sparse_vector = binary_search(member_met_shops[user], create_timestamp)
+
+            for i in range(5):
+                sparse_vector.append(len(DISTINCT_SHOP) + sum(CATEGORICAL_FEATURE_DIMS[:i]) + categorical[i])
+
+            shop_emb = ' '.join(map(str, model_shop[shop_info["id"]]))
+            user_emb = ' '.join(map(str, model_member[user]))
+            conti_str = ' '.join(map(str, continuous))
+            sparse_vec_str = ' '.join(map(str, sparse_vector))
+            categorical_str = ','.join(map(str, categorical))
+            feature_str = "%s,%s,%s,%s,%s,%s,%s,%f" % \
+                          (shop_info["name"].encode('utf-8'), user_info["name"].encode('utf-8'), shop_emb,
+                           user_emb, conti_str, sparse_vec_str, categorical_str, shop_review["star"])
+
+            return feature_str
+            
+        def reader_1():
+            for shop in shops:
+                if shop not in model_shop:
+                    continue
+                shop_info = DAO.get_one("shop", id=shop)
+                if not shop_info:
+                    continue
+
+                shop_reviews_p = DAO.get_all("review", **{"shop-id": shop, "star": {"$gte": 3.0}, "create-time":{"$type": 9}})
+                shop_reviews_n = DAO.get_all("review",**{"shop-id": shop, "star": {"$lt": 3.0}, "create-time": {"$type": 9}})
+
+                for r_n in shop_reviews_n:
+                    r_p = shop_reviews_p.next()
+
+                    d_p = make_data(shop_info, r_p)
+                    d_n = make_data(shop_info, r_n)
+
+                    if d_p:
+                        yield d_p
+                    if d_n:
+                        yield d_n
+
+        return reader_1
 
     def train(self):
         return self._train_reader(False)
@@ -224,10 +319,10 @@ class DataGenerator:
 obj = DataGenerator()
 reader = obj.train()
 
-with open('train_data.csv','w') as f:
+with open('train_data_2.csv','w') as f:
     i, c = 1, 1
     for d in reader():
-        if i % 1000 == 0:
+        if i % 100 == 0:
             print c
             c += 1
         f.write("%s\n" % d)

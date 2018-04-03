@@ -9,7 +9,7 @@ PARAM_TAR = '../models/dnn/parameters.tar'
 CATEGORY_NUM = 36
 DISTRICT_NUM = 18
 CATEGORICAL_FEATURE_DIMS = [2, CATEGORY_NUM, DISTRICT_NUM, 2, 3]
-FM_SIZE = 50957 + sum(CATEGORICAL_FEATURE_DIMS)
+FM_SIZE = 2000 + sum(CATEGORICAL_FEATURE_DIMS)
 EMB_SIZE = 64
 
 with_gpu = os.getenv('WITH_GPU', '0') != '0'
@@ -149,19 +149,104 @@ def fm_layer(input, factor_size):
 
 
 def recommender():
-    dnn = dnn_part()
+    uid = paddle.layer.data(
+        name='user_id',
+        type=paddle.data_type.dense_vector(EMB_FEATURE_DIM))
+
+    sid = paddle.layer.data(
+        name='shop_id',
+        type=paddle.data_type.dense_vector(EMB_FEATURE_DIM))
+
+    continuous = paddle.layer.data(
+        name='continuous',
+        type=paddle.data_type.dense_vector(12)
+    )
+
+    updated = paddle.layer.data(
+        name='review_updated',
+        type=paddle.data_type.integer_value(2)
+    )
+    up_emb = paddle.layer.embedding(
+        input=updated,
+        size=EMB_SIZE
+    )
+
+    category = paddle.layer.data(
+        name='shop_category',
+        type=paddle.data_type.integer_value(CATEGORY_NUM)
+    )
+    cat_emb = paddle.layer.embedding(
+        input=category,
+        size=EMB_SIZE
+    )
+
+    district = paddle.layer.data(
+        name='shop_district',
+        type=paddle.data_type.integer_value(DISTRICT_NUM)
+    )
+    dis_emb = paddle.layer.embedding(
+        input=district,
+        size=EMB_SIZE
+    )
+
+    vip = paddle.layer.data(
+        name='user_vip',
+        type=paddle.data_type.integer_value(2)
+    )
+    vip_emb = paddle.layer.embedding(
+        input=vip,
+        size=EMB_SIZE
+    )
+
+    gender = paddle.layer.data(
+        name='user_gender',
+        type=paddle.data_type.integer_value(3)
+    )
+    gen_emb = paddle.layer.embedding(
+        input=gender,
+        size=EMB_SIZE
+    )
+
+    dense_data = paddle.layer.concat(
+        input=[uid, sid, continuous]
+    )
+
+    fm_dense = fm_layer(
+        input=dense_data,
+        factor_size=524
+    )
+
+    hidden0 = paddle.layer.fc(
+        input=[uid, sid, continuous, up_emb, cat_emb, dis_emb, vip_emb, gen_emb],
+        size=RELU_NUM[0],
+        act=paddle.activation.Relu())
+
+    hidden1 = paddle.layer.fc(
+        input=hidden0,
+        size=RELU_NUM[1],
+        act=paddle.activation.Relu())
+
+    hidden2 = paddle.layer.fc(
+        input=hidden1,
+        size=RELU_NUM[2],
+        act=paddle.activation.Relu())
 
     reviewed_sparse = paddle.layer.data(
         name='sparse_input',
         type=paddle.data_type.sparse_binary_vector(FM_SIZE)
     )
 
-    fm = fm_layer(
+    fm_sparse = fm_layer(
         input=reviewed_sparse,
         factor_size=FM_SIZE)
 
+    '''
+    linear = paddle.layer.fc(
+        input=reviewed_sparse, size=1, act=paddle.activation.Linear())
+    '''
+
     predict = paddle.layer.fc(
-        input=[dnn, fm],
+        input=[fm_dense, hidden2, fm_sparse],
         size=1,
         act=paddle.activation.Sigmoid()
     )
@@ -173,7 +258,7 @@ def event_handler(event):
     if isinstance(event, paddle.event.EndIteration):
         print "\n[%s] Pass %d, Batch %d, Cost %.2f" % (
             datetime.datetime.now(), event.pass_id, event.batch_id, event.cost)
-        ploter.append(title_train, event.batch_id, event.cost)
+        ploter.append(title_train, event.pass_id, event.cost)
         ploter.plot('./train.png')
 
 
@@ -190,8 +275,14 @@ def train(data_file):
     parameters = paddle.parameters.create(cost)
 
     optimizer = paddle.optimizer.Adam(
-        learning_rate=5e-5,
+        learning_rate=5e-4,
         regularization=paddle.optimizer.L2Regularization(rate=8e-4))
+
+    optimizer = paddle.optimizer.Momentum(
+        learning_rate=5e-5,
+        regularization=paddle.optimizer.L2Regularization(rate=8e-4),
+        momentum=0.9
+    )
 
     trainer = paddle.trainer.SGD(
         cost=cost,
@@ -216,9 +307,10 @@ def train(data_file):
     obj = DataLoader(data_file)
 
     trainer.train(
-        reader=paddle.batch(paddle.reader.shuffle(obj.train(), 1024), batch_size=100),
+        reader=paddle.batch(paddle.reader.shuffle(obj.train(), 1024), batch_size=500),
         event_handler=event_handler,
-        feeding=feeding
+        feeding=feeding,
+        num_passes=30
     )
 
     print "Training done..."
@@ -231,4 +323,4 @@ parameters, inference = None, None
 
 
 if __name__ == '__main__':
-    train('./train_data_1.csv')
+    train('./train_data_2.csv')
